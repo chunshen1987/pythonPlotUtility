@@ -53,9 +53,9 @@ class EbeCollector(object):
             "sigma_0"           :   23,
             "sigma_m"           :   24,
             "anti_sigma"        :   -21,
-            "anti_simga_p"      :   -22,
+            "anti_sigma_p"      :   -22,
             "anti_sigma_0"      :   -23,
-            "anti_simga_m"      :   -24,
+            "anti_sigma_m"      :   -24,
             "xi"                :   26, # sum(27, 28)
             "xi_0"              :   27,
             "xi_m"              :   28,
