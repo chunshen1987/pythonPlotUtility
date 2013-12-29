@@ -39,6 +39,10 @@ class particleReader(object):
                                   "sigma_p", "sigma_m", "anti_sigma_p", "anti_sigma_m",
                                   "xi_m", "anti_xi_m"]
 
+        # get number of events
+        self.totNev = self.getNumberOftotalEvents()
+
+
     def getNumberOfHydroEvents(self):
         """
             return total number hydro events stored in the database
@@ -63,26 +67,30 @@ class particleReader(object):
            Nev += self.getNumberOfUrQMDEvents(hydroEventid[iev][0])
         return(Nev)
 
+    def getPidString(self, particleName = 'pion_p'):
+        pid = self.pid_lookup[particleName]
+        if pid == 1:    # all charged hadrons
+            pidList = []
+            for aPart in self.chargedHadronList:
+                pidList.append(str(self.pid_lookup[aPart]))
+            pidString = " or ".join(map(lambda(x): 'pid = ' + x, pidList))
+        else:
+            pidString = "pid = %d" % pid
+        return(pidString)
+    
     def collectParticleSpectrum(self, particleName="pion_p", rapidity_range = [-0.5, 0.5], pseudorap_range = [-0.5, 0.5]):
         """
             return event averaged particle spectrum (pT, dN/(dydpT), dN/(detadpT))
             event loop over all the hydro + UrQMD events
         """
         pT_range = linspace(0, 3, 31)
-        pid = self.pid_lookup[particleName]
-        if pid == 1:    # all charged hadrons
-            pidString = ""
-            for aPart in self.chargedHadronList:
-                pidString += "pid = %d or " % self.pid_lookup[aPart]
-            pidString += "pid = 1"
-        else:
-            pidString = "pid = %d" % pid
+        pidString = self.getPidString(particleName)
         pTavg = []
         dNdydpT = []
         dNdydpTerr = []
         dNdetadpT = []
         dNdetadpTerr = []
-        Nev = self.getNumberOftotalEvents()
+        Nev = self.totNev
         for ipT in range(len(pT_range)-1):
             pTlow = pT_range[ipT]
             pThigh = pT_range[ipT+1]
@@ -156,20 +164,13 @@ class particleReader(object):
             event loop over all the hydro + UrQMD events
         """
         eta_range = linspace(-3, 3, 61)
-        pid = self.pid_lookup[particleName]
-        if pid == 1:    # all charged hadrons
-            pidString = ""
-            for aPart in self.chargedHadronList:
-                pidString += "pid = %d or " % self.pid_lookup[aPart]
-            pidString += "pid = 1"
-        else:
-            pidString = "pid = %d" % pid
+        pidString = self.getPidString(particleName)
         etaavg = []
         dNdy = []
         dNdyerr = []
         dNdeta = []
         dNdetaerr = []
-        Nev = self.getNumberOftotalEvents()
+        Nev = self.totNev
         for ieta in range(len(eta_range)-1):
             etalow = eta_range[ieta]
             etahigh = eta_range[ieta+1]
@@ -243,7 +244,7 @@ class particleReader(object):
             rapidity or pseudorapidity range by users
         """
         npoint = 50
-        Nev = self.getNumberOftotalEvents()
+        Nev = self.totNev
         
         rapArray = linspace(rapRange[0], rapRange[1], npoint)
         dy = rapArray[1] - rapArray[0]
@@ -258,6 +259,8 @@ class particleReader(object):
         dNdetaerr = sqrt(dNdeta)/sqrt(Nev)
 
         return(dNdy, dNdyerr, dNdeta, dNdetaerr)
+
+                
 
 
 def printHelpMessageandQuit():
