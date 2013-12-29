@@ -260,6 +260,19 @@ class particleReader(object):
 
         return(dNdy, dNdyerr, dNdeta, dNdetaerr)
 
+    def collectTwoparticleCorrelation(self, particleName = 'pion_p', pT_range = [1.0, 2.0]):
+        """
+            collect two particle correlation function C(\delta phi, \delta eta) from all the events
+            within given pT range for a given particle species, "particleName"
+        """
+        Nev = self.totNev
+        pidString = self.getPidString(particleName)
+        hydroIdList = self.db._executeSQL("select distinct hydroEvent_id from particle_list").fetchall()
+        for hydroId in hydroIdList:
+            UrQMDIdList = self.db._executeSQL("select distinct UrQMDEvent_id from particle_list where hydroEvent_id = %d " % hydroId[0]).fetchall()
+            for UrQMDId in UrQMDIdList:
+                particleList = self.db._executeSQL("select pT, phi_p, pseudorapidity from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and %s and (%g <= pT and pT <= %g)" % (hydroId[0], UrQMDId[0], pidString, pT_range[0], pT_range[1])).fetchall()
+                print(len(particleList))
                 
 
 
@@ -275,4 +288,5 @@ if __name__ == "__main__":
     print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
     print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
     print(test.getParticleYield('charged'))
+    test.collectTwoparticleCorrelation()
 
