@@ -266,13 +266,64 @@ class particleReader(object):
             within given pT range for a given particle species, "particleName"
         """
         Nev = self.totNev
+        NevMix = 10
+        nphi = 15; neta = 20
+        dphi_bound = linspace(0, pi, nphi+1)
+        deta_bound = linspace(0, 2, neta+1)
+        CorrNum = zeros([nphi, neta])
+        CorrDenorm = zeros([nphi, neta])
         pidString = self.getPidString(particleName)
         hydroIdList = self.db._executeSQL("select distinct hydroEvent_id from particle_list").fetchall()
         for hydroId in hydroIdList:
             UrQMDIdList = self.db._executeSQL("select distinct UrQMDEvent_id from particle_list where hydroEvent_id = %d " % hydroId[0]).fetchall()
             for UrQMDId in UrQMDIdList:
-                particleList = self.db._executeSQL("select pT, phi_p, pseudorapidity from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and %s and (%g <= pT and pT <= %g)" % (hydroId[0], UrQMDId[0], pidString, pT_range[0], pT_range[1])).fetchall()
-                print(len(particleList))
+                #processing pairs within same event for the numerator
+                print("processing event: %d " %UrQMDId[0])
+                if self.db.doesTableExist("temp_particleList"):
+                    self.db._executeSQL("drop table temp_particleList")
+                self.db.createTableIfNotExists("temp_particleList", (("phi_p", "real"), ("pseudorapidity", "real")))  # create a temporary table
+                particleList = self.db._executeSQL("select phi_p, pseudorapidity from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and %s and (%g <= pT and pT <= %g)" % (hydroId[0], UrQMDId[0], pidString, pT_range[0], pT_range[1])).fetchall()
+                self.db.insertIntoTable("temp_particleList", particleList)
+                for iphi in range(nphi):
+                    for ieta in range(neta):
+                        Ntemp = 0
+                        for ipart in range(len(particleList)):
+                            phi_low = particleList[ipart][0] + dphi_bound[iphi]
+                            phi_high = particleList[ipart][0] + dphi_bound[iphi+1]
+                            eta_low = particleList[ipart][1] + deta_bound[ieta]
+                            eta_high = particleList[ipart][1] + deta_bound[ieta+1]
+                            Ntemp += self.db._executeSQL("select count(*) from temp_particleList where (%g < phi_p and phi_p <= %g) and (%g < pseudorapidity and pseudorapidity <= %g)" % (phi_low, phi_high, eta_low, eta_high)).fetchall()[0][0] 
+                        CorrNum[iphi, ieta] += Ntemp
+                        #print(Ntemp)
+                for ievMix in range(NevMix):
+                    hydroMixevId = random.randint(len(hydroIdList)) + 1
+                    #while (hydroMixevId == hydroId[0]): # require mixed event to be different a hydro event
+                    #    hydroMixevId = random.randint(len(hydroIdList)) + 1
+                    UrQMDMixevId = random.randint(len(UrQMDIdList)) + 1
+                    #processing pairs within mixed events for the denominator
+                    print("processing mixed events %d: event (%d, %d) vs event (%d, %d)" % (ievMix+1, hydroId[0], UrQMDId[0], hydroMixevId, UrQMDMixevId))
+                    if self.db.doesTableExist("temp_particleList_mixed"):
+                        self.db._executeSQL("drop table temp_particleList_mixed")
+                    self.db.createTableIfNotExists("temp_particleList_mixed", (("phi_p", "real"), ("pseudorapidity", "real")))  #create a temporary table
+                    particleList_mixed = self.db._executeSQL("select phi_p, pseudorapidity from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and %s and (%g <= pT and pT <= %g)" % (hydroMixevId, UrQMDMixevId, pidString, pT_range[0], pT_range[1])).fetchall()
+                    self.db.insertIntoTable("temp_particleList_mixed", particleList_mixed)
+                    for iphi in range(nphi):
+                        for ieta in range(neta):
+                            Ntemp = 0
+                            for ipart in range(len(particleList)):
+                                phi_low = particleList[ipart][0] + dphi_bound[iphi]
+                                phi_high = particleList[ipart][0] + dphi_bound[iphi+1]
+                                eta_low = particleList[ipart][1] + deta_bound[ieta]
+                                eta_high = particleList[ipart][1] + deta_bound[ieta+1]
+                                Ntemp += self.db._executeSQL("select count(*) from temp_particleList_mixed where (%g < phi_p and phi_p <= %g) and (%g < pseudorapidity and pseudorapidity <= %g)" % (phi_low, phi_high, eta_low, eta_high)).fetchall()[0][0] 
+                            CorrDenorm[iphi, ieta] += Ntemp
+                            #print(Ntemp)
+                    self.db._executeSQL("drop table temp_particleList_mixed")  # delete temporary table
+                self.db._executeSQL("drop table temp_particleList")  # delete temporary table
+
+        CorrMatrix = CorrNum/CorrDenorm
+        print(CorrMatrix)
+
                 
 
 
