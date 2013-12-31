@@ -282,7 +282,7 @@ class particleReader(object):
                 if self.db.doesTableExist("temp_particleList"):
                     self.db._executeSQL("drop table temp_particleList")
                 self.db.createTableIfNotExists("temp_particleList", (("phi_p", "real"), ("pseudorapidity", "real")))  # create a temporary table
-                particleList = self.db._executeSQL("select phi_p, pseudorapidity from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and %s and (%g <= pT and pT <= %g)" % (hydroId[0], UrQMDId[0], pidString, pT_range[0], pT_range[1])).fetchall()
+                particleList = self.db._executeSQL("select phi_p, pseudorapidity from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and (%s) and (%g <= pT and pT <= %g)" % (hydroId[0], UrQMDId[0], pidString, pT_range[0], pT_range[1])).fetchall()
                 self.db.insertIntoTable("temp_particleList", particleList)
                 for iphi in range(nphi):
                     for ieta in range(neta):
@@ -305,7 +305,7 @@ class particleReader(object):
                     if self.db.doesTableExist("temp_particleList_mixed"):
                         self.db._executeSQL("drop table temp_particleList_mixed")
                     self.db.createTableIfNotExists("temp_particleList_mixed", (("phi_p", "real"), ("pseudorapidity", "real")))  #create a temporary table
-                    particleList_mixed = self.db._executeSQL("select phi_p, pseudorapidity from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and %s and (%g <= pT and pT <= %g)" % (hydroMixevId, UrQMDMixevId, pidString, pT_range[0], pT_range[1])).fetchall()
+                    particleList_mixed = self.db._executeSQL("select phi_p, pseudorapidity from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and (%s) and (%g <= pT and pT <= %g)" % (hydroMixevId, UrQMDMixevId, pidString, pT_range[0], pT_range[1])).fetchall()
                     self.db.insertIntoTable("temp_particleList_mixed", particleList_mixed)
                     for iphi in range(nphi):
                         for ieta in range(neta):
@@ -324,7 +324,27 @@ class particleReader(object):
         CorrMatrix = CorrNum/CorrDenorm
         print(CorrMatrix)
 
-                
+    def collectEventplaneQnvector(self, particleName = 'pion_p', order = 2, pT_range = [0.5, 2.0], rap_range = [-0.5, 0.5], rapType = "rapidity"):
+        """
+            collect event plane Q vector for nth order harmonic flow 
+        """
+        Nev = self.totNev
+        pidString = self.getPidString(particleName)
+        hydroIdList = self.db._executeSQL("select distinct hydroEvent_id from particle_list").fetchall()
+        for hydroId in hydroIdList:
+            UrQMDIdList = self.db._executeSQL("select distinct UrQMDEvent_id from particle_list where hydroEvent_id = %d " % hydroId[0]).fetchall()
+            for UrQMDId in UrQMDIdList:
+                print("processing event: %d " %UrQMDId[0])
+                particleList = array(self.db._executeSQL("select pT, phi_p from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and (%s) and (%g <= pT and pT <= %g) and (%g <= %s and %s <= %g)" % (hydroId[0], UrQMDId[0], pidString, pT_range[0], pT_range[1], rap_range[0], rapType, rapType, rap_range[1])).fetchall())
+                pT = particleList[:,0]
+                phi = particleList[:,1]
+                Xn = sum(pT*cos(order*phi))
+                Yn = sum(pT*sin(order*phi))
+                Qn = sqrt(Xn*Xn + Yn*Yn)
+                psi_n = arctan2(Yn, Xn)/order
+                if psi_n < 0: psi_n += 2*pi/order
+                print(Qn, psi_n)
+        
 
 
 def printHelpMessageandQuit():
@@ -339,5 +359,6 @@ if __name__ == "__main__":
     print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
     print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
     print(test.getParticleYield('charged'))
-    test.collectTwoparticleCorrelation()
+    test.collectEventplaneQnvector('charged', 2)
+    #test.collectTwoparticleCorrelation()
 
