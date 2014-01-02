@@ -4,6 +4,8 @@ from sys import argv, exit
 from os import path, remove
 from DBR import SqliteDB
 from numpy import *
+from random import shuffle
+import scipy.special
 
 #define colors
 purple = "\033[95m"
@@ -324,27 +326,113 @@ class particleReader(object):
         CorrMatrix = CorrNum/CorrDenorm
         print(CorrMatrix)
 
-    def collectEventplaneQnvector(self, particleName = 'pion_p', order = 2, pT_range = [0.5, 2.0], rap_range = [-0.5, 0.5], rapType = "rapidity"):
+    def collectEventplaneflow(self, particleName = 'pion_p', order = 2, pT_range = [0.5, 2.0], rap_range = [-0.5, 0.5], rapType = "rapidity"):
         """
             collect event plane Q vector for nth order harmonic flow 
         """
         Nev = self.totNev
         pidString = self.getPidString(particleName)
         hydroIdList = self.db._executeSQL("select distinct hydroEvent_id from particle_list").fetchall()
+        vn_obs = 0.0
+        vn_obs_subA = 0.0; vn_obs_subB = 0.0
+        resolutionFactor_sub = 0.0
         for hydroId in hydroIdList:
             UrQMDIdList = self.db._executeSQL("select distinct UrQMDEvent_id from particle_list where hydroEvent_id = %d " % hydroId[0]).fetchall()
             for UrQMDId in UrQMDIdList:
                 print("processing event: %d " %UrQMDId[0])
                 particleList = array(self.db._executeSQL("select pT, phi_p from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and (%s) and (%g <= pT and pT <= %g) and (%g <= %s and %s <= %g)" % (hydroId[0], UrQMDId[0], pidString, pT_range[0], pT_range[1], rap_range[0], rapType, rapType, rap_range[1])).fetchall())
+                #calculate Qn vector
                 pT = particleList[:,0]
+                weight = pT
                 phi = particleList[:,1]
-                Xn = sum(pT*cos(order*phi))
-                Yn = sum(pT*sin(order*phi))
-                Qn = sqrt(Xn*Xn + Yn*Yn)
-                psi_n = arctan2(Yn, Xn)/order
-                if psi_n < 0: psi_n += 2*pi/order
-                print(Qn, psi_n)
+                Qn_X = sum(weight*cos(order*phi))
+                Qn_Y = sum(weight*sin(order*phi))
 
+                #calculate resolution factor
+                Nparticle = len(pT)
+                idx = range(Nparticle); shuffle(idx)
+                idx_A = idx[0:int(Nparticle/2)]; idx_B = idx[int(Nparticle/2):]
+                subQnA_X = 0.0; subQnA_Y = 0.0
+                for i in idx_A:
+                    subQnA_X += weight[i]*cos(order*phi[i])
+                    subQnA_Y += weight[i]*sin(order*phi[i])
+                subPsi_nA = arctan2(subQnA_Y, subQnA_X)/order
+                subQnB_X = 0.0; subQnB_Y = 0.0
+                for i in idx_B:
+                    subQnB_X += weight[i]*cos(order*phi[i])
+                    subQnB_Y += weight[i]*sin(order*phi[i])
+                subPsi_nB = arctan2(subQnB_Y, subQnB_X)/order
+                resolutionFactor_sub += cos(order*(subPsi_nA - subPsi_nB))
+
+                #calculate event-plane vn
+                for ipart in range(Nparticle):
+                    Xn = Qn_X - weight[ipart]*cos(order*phi[ipart])
+                    Yn = Qn_Y - weight[ipart]*sin(order*phi[ipart])
+                    psi_n = arctan2(Yn, Xn)/order
+                    #if psi_n < 0: psi_n += 2*pi/order
+                    vn_obs += cos(order*(phi[ipart] - psi_n))
+                    if ipart in idx_A:
+                        subXn = subQnA_X - weight[ipart]*cos(order*phi[ipart])
+                        subYn = subQnA_Y - weight[ipart]*sin(order*phi[ipart])
+                        psi_n_subA = arctan2(subXn, subYn)/order
+                        psi_n_subB = subPsi_nB
+                    else:
+                        subXn = subQnB_X - weight[ipart]*cos(order*phi[ipart])
+                        subYn = subQnB_Y - weight[ipart]*sin(order*phi[ipart])
+                        psi_n_subB = arctan2(subXn, subYn)/order
+                        psi_n_subA = subPsi_nA
+                    vn_obs_subA += cos(order*(phi[ipart] - psi_n_subA))
+                    vn_obs_subB += cos(order*(phi[ipart] - psi_n_subB))
+                vn_obs /= Nparticle
+                vn_obs_subA /= Nparticle
+                vn_obs_subB /= Nparticle
+        vn_obs /= Nev
+        resolutionFactor_sub = sqrt(resolutionFactor_sub/Nev)
+        resolutionFactor_full = self.getFullplaneResolutionFactor(resolutionFactor_sub, 2.0)
+        vnEP = vn_obs/resolutionFactor_full
+        vnsubEP = (vn_obs_subA + vn_obs_subB)/(2.*resolutionFactor_sub)
+        print(resolutionFactor_full, vnEP, resolutionFactor_sub, vnsubEP)
+
+    def getFullplaneResolutionFactor(self, resolutionFactor_sub, Nfactor):
+        """
+            use binary search for numerical solution for R(chi_s) = resolutionFactor_sub
+            where R(chi) is defined in Eq. (7) in arXiv:0904.2315v3 and calculate 
+            resolutionFactor for the full event
+        """
+        # check
+        if(resolutionFactor_sub > 1.0):
+            print("error: resolutionFactor_sub = % g,  is larger than 1!" % resolutionFactor_sub)
+            exit(-1)
+        
+        tol = 1e-8 # accuracy
+        
+        #search boundary
+        left = 0.0; right = 2.0 # R(2.0) > 1.0
+        mid = (right + left)*0.5
+        dis = right - left
+        while dis > tol:
+            midval = self.resolution_Rfunction(mid)
+            diff = resolutionFactor_sub - midval
+            if abs(diff) < tol:
+                chi_s = mid
+                break
+            elif diff > tol :
+                left = mid
+            else:
+                right = mid
+            dis = right - left
+            mid = (right + left)*0.5
+        chi_s = mid
+        return(self.resolution_Rfunction(chi_s*sqrt(Nfactor)))
+        
+
+    def resolution_Rfunction(self, chi):
+        """
+            R(chi) for calculating resolution factor for the full event
+        """
+        chisq = chi*chi
+        result = sqrt(pi)/2*exp(-chisq/2)*chi*(scipy.special.i0(chisq/2) + scipy.special.i1(chisq/2))
+        return result
 
 def printHelpMessageandQuit():
     print "Usage : "
@@ -358,6 +446,6 @@ if __name__ == "__main__":
     print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
     print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
     print(test.getParticleYield('charged'))
-    test.collectEventplaneQnvector('charged', 2)
+    test.collectEventplaneflow('charged', 2)
     #test.collectTwoparticleCorrelation()
 
