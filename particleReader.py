@@ -344,7 +344,6 @@ class particleReader(object):
                 psi_n = arctan2(Yn, Xn)/order
                 if psi_n < 0: psi_n += 2*pi/order
                 print(Qn, psi_n)
-        
 
 
 def printHelpMessageandQuit():

@@ -16,9 +16,9 @@ def getPlotElements(idx):
 
 def getBinnedAveragedDatawithErrorbars(dataMatrix, nbin, bincol=0):
    """
-   Return the binned average of data, together with the count of the number 
-   of data and normalized probability distribution. It returns another matrix
-   for the statistical error bars for each binned quantities
+      Return the binned average of data, together with the count of the number 
+      of data and normalized probability distribution. It returns another matrix
+      for the statistical error bars for each binned quantities
    """
    if dataMatrix.ndim == 1:
       ncol = 1

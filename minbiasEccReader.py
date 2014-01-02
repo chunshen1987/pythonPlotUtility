@@ -4,6 +4,7 @@ from sys import argv, exit
 from os import path, remove
 from DBR import SqliteDB
 from numpy import *
+from CSplottools import getBinnedAveragedDatawithErrorbars
 
 #define colors
 purple = "\033[95m"
@@ -32,10 +33,17 @@ class minbiasEccReader(object):
         else:
             raise TypeError("EbeDBReader.__init__: the input argument must be a string or a SqliteDB database.")
 
-        #define centrality boundaries
+        # define centrality boundaries
         self.centralityBoundaries = [(0,0.2),(0,1),(0,5),(5,10),(10,20),(20,30),
                                      (30,40),(40,50),(50,60),(60,70),(70,80)]
-      
+
+        # get total number of events
+        self.Nev = self.getNumberofEvents()
+     
+    def getNumberofEvents(self):
+        Nev = self.db._executeSQL("select count(*) from collisionParameters").fetchall()[0][0]
+        return(Nev)
+
     def cutCentralitieswitheccStatistics(self, cutType, multiplicityFactor = 1.0):
         """
             this function cut the centralities and also output event averaged ecc_n with 
@@ -45,7 +53,7 @@ class minbiasEccReader(object):
         centralityOutput = open('centralityCut_%s.dat' % cutType, 'w')
         eccnStatedOutput = open('eccnStatistics_ed_%s.dat' % cutType, 'w')
         eccnStatsdOutput = open('eccnStatistics_sd_%s.dat' % cutType, 'w')
-        nevent = self.db._executeSQL("select count() from collisionParameters").fetchall()[0][0]
+        nevent = self.Nev
 
         for icen in range(len(self.centralityBoundaries)):
             lowerbound = self.centralityBoundaries[icen][0]
@@ -83,6 +91,29 @@ class minbiasEccReader(object):
         centralityOutput.close()
         eccnStatsdOutput.close()
         eccnStatedOutput.close()
+    
+    def getDistribution(self, disType = 'total_entropy', nbin = 30, cutType = 'total_entropy', centralityBound = [0, 100]):
+        """
+            this function bin and output distribution of a given quantity in a given centrality bin
+        """
+        nevent = self.Nev
+        lowerbound = centralityBound[0]
+        upperbound = centralityBound[1]
+        nsample = int(nevent*(upperbound - lowerbound)/100)-1
+        noffset = int(nevent*lowerbound/100)
+        if disType in ['Npart', 'Ncoll', 'b', 'total_entropy']:
+            fetchedData = array(self.db._executeSQL("select %s from collisionParameters order by -%s limit %d offset %d" % (disType, cutType, nsample, noffset)).fetchall())
+        elif 'ecc' in disType:
+            temp = disType.split('_')
+            eccorder = int(temp[1])
+            tempData = array(self.db._executeSQL("select ecc_real, ecc_imag from eccentricities where ecc_id = 2 and n = %d and event_id in (select event_id from collisionParameters order by -collisionParameters.%s limit %d offset %d)" % (eccorder, cutType, nsample, noffset)).fetchall())
+            fetchedData = sqrt(tempData[:,0]**2 + tempData[:,1]**2)
+            
+        binnedData, binnedData_err = getBinnedAveragedDatawithErrorbars(fetchedData, nbin)
+        disOutput = open('%s_distribution_C%d-%d_%s.dat' % (disType, int(centralityBound[0]), int(centralityBound[1]), cutType), 'w')
+        for i in range(nbin):
+            disOutput.write("%18.8e  %18.8e  %18.8e\n" % (binnedData[i,0], binnedData[i,2], binnedData[i,2]/sqrt(nsample)))
+        disOutput.close()
 
 if __name__ == "__main__":
     reader = minbiasEccReader(str(argv[1]))
