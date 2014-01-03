@@ -326,6 +326,43 @@ class particleReader(object):
         CorrMatrix = CorrNum/CorrDenorm
         print(CorrMatrix)
 
+    def collectGlobalQnvectorforeachEvent(self):
+        """
+            collect event plane Q vector for nth order harmonic flow for all particles in the event
+        """
+        particleName = "charged"
+        weightTypes = ['1', 'pT']
+        norder = 6
+        Nev = self.totNev
+        pidString = self.getPidString(particleName)
+        hydroIdList = self.db._executeSQL("select distinct hydroEvent_id from particle_list").fetchall()
+        if self.db.createTableIfNotExists("globalQnvector", (("hydroEvent_id","integer"), ("UrQMDEvent_id", "integer"), ("weightType", "text"), ("n", "integer"), ("Qn_X", "real"), ("Qn_Y", "real"))):
+            for hydroId in hydroIdList:
+                UrQMDIdList = self.db._executeSQL("select distinct UrQMDEvent_id from particle_list where hydroEvent_id = %d " % hydroId[0]).fetchall()
+                for UrQMDId in UrQMDIdList:
+                    print("processing event: %d " %UrQMDId[0])
+                    particleList = array(self.db._executeSQL("select pT, phi_p from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and (%s)" % (hydroId[0], UrQMDId[0], pidString)).fetchall())
+                    for order in range(1,norder+1):
+                        #calculate Qn vector
+                        pT = particleList[:,0]
+                        for weightType in weightTypes:
+                            if weightType == '1':
+                                weight = ones(len(pT))
+                            elif weightType == 'pT':
+                                weight = pT
+                            phi = particleList[:,1]
+                            Qn_X = sum(weight*cos(order*phi))
+                            Qn_Y = sum(weight*sin(order*phi))
+                            self.db.insertIntoTable("globalQnvector", (hydroId[0], UrQMDId[0], weightType, order, Qn_X, Qn_Y))
+            self.db._dbCon.commit()  # commit changes
+        else:
+            print("Qn vectors from all charged particles are already collected!")
+            inputval = raw_input("Do you want to delete the existing one and collect again?")
+            if inputval.lower() == 'y' or inputval.lower() == 'yes':
+                self.db._executeSQL("drop table globalQnvector")
+                self.collectGlobalQnvectorforeachEvent()
+
+
     def collectEventplaneflow(self, particleName = 'pion_p', order = 2, pT_range = [0.5, 2.0], rap_range = [-0.5, 0.5], rapType = "rapidity"):
         """
             collect event plane Q vector for nth order harmonic flow 
@@ -446,6 +483,7 @@ if __name__ == "__main__":
     print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
     print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
     print(test.getParticleYield('charged'))
+    test.collectGlobalQnvectorforeachEvent()
     test.collectEventplaneflow('charged', 2)
     #test.collectTwoparticleCorrelation()
 
