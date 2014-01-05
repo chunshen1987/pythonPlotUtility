@@ -328,7 +328,8 @@ class particleReader(object):
 
     def collectGlobalQnvectorforeachEvent(self):
         """
-            collect event plane Q vector for nth order harmonic flow for all particles in the event
+            collect event plane Q vector for nth order harmonic flow calculated 
+            using all charged particles in the event
         """
         particleName = "charged"
         weightTypes = ['1', 'pT']
@@ -362,6 +363,124 @@ class particleReader(object):
                 self.db._executeSQL("drop table globalQnvector")
                 self.collectGlobalQnvectorforeachEvent()
 
+    def getFullplaneResolutionFactor(self, resolutionFactor_sub, Nfactor):
+        """
+            use binary search for numerical solution for R(chi_s) = resolutionFactor_sub
+            where R(chi) is defined in Eq. (7) in arXiv:0904.2315v3 and calculate 
+            resolutionFactor for the full event
+        """
+        # check
+        if(resolutionFactor_sub > 1.0):
+            print("error: resolutionFactor_sub = % g,  is larger than 1!" % resolutionFactor_sub)
+            exit(-1)
+        
+        tol = 1e-8 # accuracy
+        
+        #search boundary
+        left = 0.0; right = 2.0 # R(2.0) > 1.0
+        mid = (right + left)*0.5
+        dis = right - left
+        while dis > tol:
+            midval = self.resolution_Rfunction(mid)
+            diff = resolutionFactor_sub - midval
+            if abs(diff) < tol:
+                chi_s = mid
+                break
+            elif diff > tol :
+                left = mid
+            else:
+                right = mid
+            dis = right - left
+            mid = (right + left)*0.5
+        chi_s = mid
+        return(self.resolution_Rfunction(chi_s*sqrt(Nfactor)))
+        
+    def resolution_Rfunction(self, chi):
+        """
+            R(chi) for calculating resolution factor for the full event
+        """
+        chisq = chi*chi
+        result = sqrt(pi)/2*exp(-chisq/2)*chi*(scipy.special.i0(chisq/2) + scipy.special.i1(chisq/2))
+        return result
+
+    def calculcateResolutionfactor(self, particleName, order_range = [1, 6], oversampling = 1, weightType = 'pT', pT_range = [0.0, 3.0], rapType = "rapidity", rap_range = [-4.0, 4.0]):
+        """
+            calculate nth order full resolution factor using given species of
+            particles from all events with option of oversampling.
+        """
+        Nev = self.totNev
+        pidString = self.getPidString(particleName)
+        hydroIdList = self.db._executeSQL("select distinct hydroEvent_id from particle_list").fetchall()
+        num_of_order  = order_range[1] - order_range[0] + 1
+        resolutionFactor_sub = zeros(num_of_order)
+        for hydroId in hydroIdList:
+            UrQMDIdList = self.db._executeSQL("select distinct UrQMDEvent_id from particle_list where hydroEvent_id = %d " % hydroId[0]).fetchall()
+            for UrQMDId in UrQMDIdList:
+                print("processing event: (%d, %d) " % (hydroId[0],UrQMDId[0]))
+                particleList = array(self.db._executeSQL("select pT, phi_p from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and (%s) and (%g <= pT and pT <= %g) and (%g <= %s and %s <= %g)" % (hydroId[0], UrQMDId[0], pidString, pT_range[0], pT_range[1], rap_range[0], rapType, rapType, rap_range[1])).fetchall())
+                
+                #calculate resolution factor
+                pT = particleList[:,0]
+                phi = particleList[:,1]
+                if weightType == '1':
+                    weight = ones(len(pT))
+                elif weightType == 'pT':
+                    weight = pT
+                Nparticle = len(pT)
+                for iorder in range(num_of_order):
+                    order = order_range[0] + iorder
+                    for isample in range(oversampling):
+                        idx = range(Nparticle); shuffle(idx)
+                        idx_A = idx[0:int(Nparticle/2)]; idx_B = idx[int(Nparticle/2):]
+                        subQnA_X = 0.0; subQnA_Y = 0.0
+                        for i in idx_A:
+                            subQnA_X += weight[i]*cos(order*phi[i])
+                            subQnA_Y += weight[i]*sin(order*phi[i])
+                        subPsi_nA = arctan2(subQnA_Y, subQnA_X)/order
+                        subQnB_X = 0.0; subQnB_Y = 0.0
+                        for i in idx_B:
+                            subQnB_X += weight[i]*cos(order*phi[i])
+                            subQnB_Y += weight[i]*sin(order*phi[i])
+                        subPsi_nB = arctan2(subQnB_Y, subQnB_X)/order
+                        resolutionFactor_sub[iorder] += cos(order*(subPsi_nA - subPsi_nB))
+                    resolutionFactor_sub /= oversampling
+        resolutionFactor_sub = sqrt(resolutionFactor_sub/Nev)
+        resolutionFactor_full = []
+        for iorder in range(num_of_order):
+            resolutionFactor_full.append(self.getFullplaneResolutionFactor(resolutionFactor_sub[iorder], 2.0))
+        return(resolutionFactor_full)
+                    
+    def collectGlobalResolutionFactor(self):
+        """
+            collect and store the full resolution factors calculated using all charged particles
+            from all the events for order n = 1-6
+        """
+        particleName = "charged"
+        weightTypes = ['1', 'pT']
+        norder = 6
+        oversampleFactor = 10
+        if self.db.createTableIfNotExists("resolutionFactorR", (("weightType", "text"), ("n", "integer"), ("R","real"))):
+            for weightType in weightTypes:
+                R = self.calculcateResolutionfactor(particleName, order_range = [1, norder], oversampling = oversampleFactor, weightType = weightType, pT_range = [0.0, 4.0], rapType = "pseudorapidity", rap_range = [-4.0, 4.0])
+
+                for iorder in range(len(R)):
+                    order = iorder + 1
+                    self.db.insertIntoTable("resolutionFactorR", (weightType, order, R[iorder]))
+            self.db._dbCon.commit()  # commit changes
+        else:
+            print("Resolution factors from all charged particles are already collected!")
+            inputval = raw_input("Do you want to delete the existing one and collect again?")
+            if inputval.lower() == 'y' or inputval.lower() == 'yes':
+                self.db._executeSQL("drop table resolutionFactorR")
+                self.collectGlobalResolutionFactor()
+
+    def collectsubEventplaneflow(self, particleName = 'pion_p', order = 2, pT_range = [0.5, 2.0], rap_range = [-0.5, 0.5], rapType = "rapidity"):
+        """
+            collect particle's nth order harmonic flow defined by the sub 
+            event plane, vn = < {cos(phi_i - psi_A)}_i >_ev/<cos(psi_A - psi_B)>_ev.
+            psi_A and psi_B are determined from randomly chosen N/2 particles from
+            the event
+        """
 
     def collectEventplaneflow(self, particleName = 'pion_p', order = 2, pT_range = [0.5, 2.0], rap_range = [-0.5, 0.5], rapType = "rapidity"):
         """
@@ -430,46 +549,6 @@ class particleReader(object):
         vnsubEP = (vn_obs_subA + vn_obs_subB)/(2.*resolutionFactor_sub)
         print(resolutionFactor_full, vnEP, resolutionFactor_sub, vnsubEP)
 
-    def getFullplaneResolutionFactor(self, resolutionFactor_sub, Nfactor):
-        """
-            use binary search for numerical solution for R(chi_s) = resolutionFactor_sub
-            where R(chi) is defined in Eq. (7) in arXiv:0904.2315v3 and calculate 
-            resolutionFactor for the full event
-        """
-        # check
-        if(resolutionFactor_sub > 1.0):
-            print("error: resolutionFactor_sub = % g,  is larger than 1!" % resolutionFactor_sub)
-            exit(-1)
-        
-        tol = 1e-8 # accuracy
-        
-        #search boundary
-        left = 0.0; right = 2.0 # R(2.0) > 1.0
-        mid = (right + left)*0.5
-        dis = right - left
-        while dis > tol:
-            midval = self.resolution_Rfunction(mid)
-            diff = resolutionFactor_sub - midval
-            if abs(diff) < tol:
-                chi_s = mid
-                break
-            elif diff > tol :
-                left = mid
-            else:
-                right = mid
-            dis = right - left
-            mid = (right + left)*0.5
-        chi_s = mid
-        return(self.resolution_Rfunction(chi_s*sqrt(Nfactor)))
-        
-
-    def resolution_Rfunction(self, chi):
-        """
-            R(chi) for calculating resolution factor for the full event
-        """
-        chisq = chi*chi
-        result = sqrt(pi)/2*exp(-chisq/2)*chi*(scipy.special.i0(chisq/2) + scipy.special.i1(chisq/2))
-        return result
 
 def printHelpMessageandQuit():
     print "Usage : "
@@ -483,7 +562,7 @@ if __name__ == "__main__":
     print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
     print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
     print(test.getParticleYield('charged'))
-    test.collectGlobalQnvectorforeachEvent()
+    test.collectGlobalResolutionFactor()
     test.collectEventplaneflow('charged', 2)
     #test.collectTwoparticleCorrelation()
 
