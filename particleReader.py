@@ -70,14 +70,17 @@ class particleReader(object):
         return(Nev)
 
     def getPidString(self, particleName = 'pion_p'):
-        pid = self.pid_lookup[particleName]
-        if pid == 1:    # all charged hadrons
+        if isinstance(particleName, list):
             pidList = []
-            for aPart in self.chargedHadronList:
+            for aPart in particleName:
                 pidList.append(str(self.pid_lookup[aPart]))
             pidString = " or ".join(map(lambda(x): 'pid = ' + x, pidList))
         else:
-            pidString = "pid = %d" % pid
+            pid = self.pid_lookup[particleName]
+            if pid == 1:    # all charged hadrons
+                pidString = self.getPidString(self.chargedHadronList)
+            else:
+                pidString = "pid = %d" % pid
         return(pidString)
     
     def collectParticleSpectrum(self, particleName="pion_p", rapidity_range = [-0.5, 0.5], pseudorap_range = [-0.5, 0.5]):
