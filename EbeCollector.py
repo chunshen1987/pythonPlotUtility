@@ -613,7 +613,7 @@ class EbeCollector(object):
                         x, y, z, t = map(lambda x: float(x.replace("D","E")), aLine[155:256].split())
                         pdgId = int(aLine[15:22])
                         try:
-                            databasePid = self.PDGpidDict[pdgId]
+                            databasePid = self.pidDict[self.PDGpidDict[pdgId]]
                         except ValueError as e:
                             print("Can not find particle id in the dictionary!")
                             exit(e)
