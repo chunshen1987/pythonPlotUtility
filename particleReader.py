@@ -434,7 +434,10 @@ class particleReader(object):
                     order = order_range[0] + iorder
                     for isample in range(oversampling):
                         idx = range(Nparticle); shuffle(idx)
-                        idx_A = idx[0:int(Nparticle/2)]; idx_B = idx[int(Nparticle/2):]
+                        idx_A = idx[0:int(Nparticle/2)]
+                        shuffle(idx)
+                        idx_B = idx[0:int(Nparticle/2)]
+
                         subQnA_X = 0.0; subQnA_Y = 0.0
                         for i in idx_A:
                             subQnA_X += weight[i]*cos(order*phi[i])
