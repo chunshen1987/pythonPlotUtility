@@ -409,7 +409,8 @@ class particleReader(object):
     def calculcateResolutionfactor(self, particleName, order_range = [1, 6], oversampling = 1, weightType = 'pT', pT_range = [0.0, 3.0], rapType = "rapidity", rap_range = [-4.0, 4.0]):
         """
             calculate nth order full resolution factor using given species of
-            particles from all events with option of oversampling.
+            particles within pT and rapidity cuts from all events with option 
+            of oversampling.
         """
         Nev = self.totNev
         pidString = self.getPidString(particleName)
@@ -449,8 +450,7 @@ class particleReader(object):
                             subQnB_Y += weight[i]*sin(order*phi[i])
                         subPsi_nB = arctan2(subQnB_Y, subQnB_X)/order
                         resolutionFactor_sub[iorder] += cos(order*(subPsi_nA - subPsi_nB))
-                    resolutionFactor_sub /= oversampling
-        resolutionFactor_sub = sqrt(resolutionFactor_sub/Nev)
+        resolutionFactor_sub = sqrt(resolutionFactor_sub/Nev/oversampling)
         resolutionFactor_full = []
         for iorder in range(num_of_order):
             resolutionFactor_full.append(self.getFullplaneResolutionFactor(resolutionFactor_sub[iorder], 2.0))
