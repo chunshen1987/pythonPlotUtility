@@ -100,11 +100,13 @@ class particleReader(object):
             return event averaged particle spectrum (pT, dN/(dydpT), dN/(detadpT))
             event loop over all the hydro + UrQMD events
         """
+        print("collect particle spectra of %s ..." % particleName)
         pT_range = linspace(0, 3, 31)
         pidString = self.getPidString(particleName)
         pTavg = []
         dNdydpT = []
         dNdydpTerr = []
+        pTetaavg = []
         dNdetadpT = []
         dNdetadpTerr = []
         Nev = self.totNev
@@ -127,11 +129,15 @@ class particleReader(object):
             whereClause = "(%s)" % pidString
             whereClause += " and (%g<=pT and pT<=%g) and (%g<=pseudorapidity and pseudorapidity<=%g)" % (pTlow, pThigh, pseudorap_range[0], pseudorap_range[1])
             tempdata = self.db.selectFromTable("particle_list", "count(*), avg(pT)", whereClause=whereClause)
+            if tempdata[0][1] == None:
+                pTetaavg.append((pTlow + pThigh)/2.)
+            else:
+                pTetaavg.append(tempdata[0][1])
             deltaN = tempdata[0][0]
             dNdetadpT.append(deltaN/dpT/Nev)
             dNdetadpTerr.append(sqrt(deltaN/dpT/Nev)/sqrt(Nev))
 
-        return(array([pTavg, dNdydpT, dNdydpTerr, dNdetadpT, dNdetadpTerr]).transpose())
+        return(array([pTavg, dNdydpT, dNdydpTerr, pTetaavg, dNdetadpT, dNdetadpTerr]).transpose())
     
     def collectBasicParticleSpectra(self):
         """
@@ -142,7 +148,7 @@ class particleReader(object):
             pid = self.pid_lookup[aParticle]
             dNdata = self.collectParticleSpectrum(aParticle)
             for idx in range(len(dNdata[:,0])):
-                self.db.insertIntoTable("particleSpectra", (pid, dNdata[idx,0], dNdata[idx,1], dNdata[idx,2], dNdata[idx,3], dNdata[idx,4]))
+                self.db.insertIntoTable("particleSpectra", (pid, dNdata[idx,0], dNdata[idx,1], dNdata[idx,2], dNdata[idx,3], dNdata[idx,4], dNdata[idx,5]))
             self.db._dbCon.commit()  # commit changes
      
     def getParticleSpectrum(self, particleName = 'pion_p', pT_range = linspace(0,3,20), rapidity_range=[-0.5, 0.5]):
@@ -154,9 +160,9 @@ class particleReader(object):
         eps = 1e-15
         pid = self.pid_lookup[particleName]
         #check particle spectrum table is exist or not
-        if self.db.createTableIfNotExists("particleSpectra", (("pid","integer"), ("pT","real"), ("dNdydpT", "real"), ("dNdydpTerr", "real"), ("dNdetadpT", "real"), ("dNdetadpTerr", "real") )):
+        if self.db.createTableIfNotExists("particleSpectra", (("pid","integer"), ("pT","real"), ("dNdydpT", "real"), ("dNdydpTerr", "real"), ("pTeta", "real"), ("dNdetadpT", "real"), ("dNdetadpTerr", "real") )):
             self.collectBasicParticleSpectra()
-        dNdata = array(self.db._executeSQL("select pT, dNdydpT, dNdydpTerr, dNdetadpT, dNdetadpTerr from particleSpectra where pid = %d " % pid).fetchall())
+        dNdata = array(self.db._executeSQL("select pT, dNdydpT, dNdydpTerr, pTeta, dNdetadpT, dNdetadpTerr from particleSpectra where pid = %d " % pid).fetchall())
         if(dNdata.size == 0):
             dNdata = self.collectParticleSpectrum(particleName)
             if (sum(abs(dNdata[:,1])) <  1e-15):
@@ -164,14 +170,14 @@ class particleReader(object):
                 return None
             else:
                 for idx in range(len(dNdata[:,0])):
-                    self.db.insertIntoTable("particleSpectra", (pid, dNdata[idx,0], dNdata[idx,1], dNdata[idx,2], dNdata[idx,3], dNdata[idx,4]))
+                    self.db.insertIntoTable("particleSpectra", (pid, dNdata[idx,0], dNdata[idx,1], dNdata[idx,2], dNdata[idx,3], dNdata[idx,4], dNdata[idx,5]))
                 self.db._dbCon.commit()  # commit changes
 
         #interpolate results to desired pT range
         dNdyinterp = exp(interp(pT_range, dNdata[:,0], log(dNdata[:,1]+eps)))
         dNdyinterp_err = exp(interp(pT_range, dNdata[:,0], log(dNdata[:,2]+eps)))
-        dNdetainterp = exp(interp(pT_range, dNdata[:,0], log(dNdata[:,3]+eps)))
-        dNdetainterp_err = exp(interp(pT_range, dNdata[:,0], log(dNdata[:,4]+eps)))
+        dNdetainterp = exp(interp(pT_range, dNdata[:,3], log(dNdata[:,4]+eps)))
+        dNdetainterp_err = exp(interp(pT_range, dNdata[:,3], log(dNdata[:,5]+eps)))
         results = array([pT_range, dNdyinterp, dNdyinterp_err, dNdetainterp, dNdetainterp_err])
         return(transpose(results))
 
@@ -656,7 +662,7 @@ if __name__ == "__main__":
         printHelpMessageandQuit()
     test = particleReader(str(argv[1]))
     print(test.getAvgdiffvnflow(particleName = "charged", psiR = 0., order = 2, pT_range = linspace(0.0, 2.0, 20)))
-    #print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
+    print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
     #print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
     #print(test.getParticleYield('charged'))
     #test.collectGlobalResolutionFactor()
