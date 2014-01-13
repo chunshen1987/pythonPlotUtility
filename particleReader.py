@@ -42,9 +42,18 @@ class particleReader(object):
                                   "xi_m", "anti_xi_m"]
 
         # get number of events
-        self.totNev = self.getNumberOftotalEvents()
+        if self.db.createTableIfNotExists("number_of_events", (("Nev_tot", "integer"), ("Nev_hydro", "integer"))):
+            self.totNev = self.getNumberOftotalEvents()
+            self.hydroNev = self.getNumberOfHydroEvents()
+            self.db.insertIntoTable("number_of_events", (int(self.totNev), int(self.hydroNev)))
+            self.db._dbCon.commit()  # commit changes
+        else:
+            self.totNev = self.db._executeSQL("select Nev_tot from number_of_events").fetchall()[0][0]
+            self.hydroNev = self.db._executeSQL("select Nev_hydro from number_of_events").fetchall()[0][0]
 
-
+    ################################################################################
+    # functions to get number of events
+    ################################################################################ 
     def getNumberOfHydroEvents(self):
         """
             return total number hydro events stored in the database
@@ -83,6 +92,9 @@ class particleReader(object):
                 pidString = "pid = %d" % pid
         return(pidString)
     
+    ################################################################################
+    # functions to collect particle spectra and yields
+    ################################################################################ 
     def collectParticleSpectrum(self, particleName="pion_p", rapidity_range = [-0.5, 0.5], pseudorap_range = [-0.5, 0.5]):
         """
             return event averaged particle spectrum (pT, dN/(dydpT), dN/(detadpT))
@@ -265,6 +277,10 @@ class particleReader(object):
 
         return(dNdy, dNdyerr, dNdeta, dNdetaerr)
 
+    
+    ################################################################################
+    # functions to collect two particle correlation
+    ################################################################################ 
     def collectTwoparticleCorrelation(self, particleName = 'pion_p', pT_range = [1.0, 2.0]):
         """
             collect two particle correlation function C(\delta phi, \delta eta) from all the events
@@ -328,6 +344,44 @@ class particleReader(object):
 
         CorrMatrix = CorrNum/CorrDenorm
         print(CorrMatrix)
+
+    ################################################################################
+    # functions to collect particle anisotropic flows
+    ################################################################################ 
+    def collectAvgdiffvnflow(self, psiR = 0., particleName = 'pion_p', rapidity_range = [-0.5, 0.5], pseudorap_range = [-0.5, 0.5]):
+        """
+            collect <cos(n*(phi_i - psiR))>, which is averaged over for all particles for the given particle 
+            species over all events
+        """
+        pT_range = linspace(0, 3, 31)
+        pidString = self.getPidString(particleName)
+        pid = self.pid_lookup[particleName]
+        norder = 6
+        Nev = self.totNev
+        tableNamesList = ["Avgdiffvnflow", "Avgdiffvnetaflow"]
+        rapTypes = ['rapidity', 'pseudorapidity']
+        for itable in range(len(tableNamesList)):
+            if self.db.createTableIfNotExists(tableNamesList[itable], (("pid", "integer"), ("n", "integer"), ("pT", "real"), ("vn_real", "real"), ("vn_realerr", "real"), ("vn_imag", "real"), ("vn_imag_err", "real") )):
+                for ipT in range(len(pT_range)-1):
+                    pTlow = pT_range[ipT]
+                    pThigh = pT_range[ipT+1]
+                    dpT = pThigh - pTlow
+                    data = array(self.db._executeSQL("select pT, phi_p from particle_list where (%s) and (%g <= pT and pT <= %g) and (%g <= %s and %s <= %g)" % (pidString, pTlow, pThigh, rapidity_range[0], rapTypes[itable], rapTypes[itable], rapidity_range[1])).fetchall())
+                    for iorder in range(1, norder+1):
+                        if len(data[:,0]) == 0:
+                            pTavg = (pTlow + pThigh)/2.
+                            vn_real = 0.0; vn_real_err = 0.0
+                            vn_imag = 0.0; vn_imag_err = 0.0
+                        else:
+                            pTavg = mean(data[:,0])
+                            temparray = cos(iorder*(data[:,1] - psiR))
+                            vn_real = mean(temparray)
+                            vn_real_err = std(temparray)/sqrt(Nev)
+                            temparray = sin(iorder*(data[:,1] - psiR))
+                            vn_imag = mean(temparray)
+                            vn_imag_err = std(temparray)/sqrt(Nev)
+                            self.db.insertIntoTable(tableNamesList[itable], (pid, iorder, pTavg, vn_real, vn_real_err, vn_imag, vn_imag_err))
+                self.db._dbCon.commit()  # commit changes
 
     def collectGlobalQnvectorforeachEvent(self):
         """
@@ -565,10 +619,11 @@ if __name__ == "__main__":
     if len(argv) < 2:
         printHelpMessageandQuit()
     test = particleReader(str(argv[1]))
-    print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
-    print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
-    print(test.getParticleYield('charged'))
-    test.collectGlobalResolutionFactor()
-    test.collectEventplaneflow('charged', 2)
+    test.collectAvgdiffvnflow(particleName = "charged")
+    #print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
+    #print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
+    #print(test.getParticleYield('charged'))
+    #test.collectGlobalResolutionFactor()
+    #test.collectEventplaneflow('charged', 2)
     #test.collectTwoparticleCorrelation()
 
