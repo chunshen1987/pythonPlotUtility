@@ -42,6 +42,7 @@ class particleReader(object):
                                   "xi_m", "anti_xi_m"]
 
         # get number of events
+        # pre-collect it to shorten the initial loading time of the database
         if self.db.createTableIfNotExists("number_of_events", (("Nev_tot", "integer"), ("Nev_hydro", "integer"))):
             self.totNev = self.getNumberOftotalEvents()
             self.hydroNev = self.getNumberOfHydroEvents()
@@ -359,7 +360,7 @@ class particleReader(object):
             collect <cos(n*(phi_i - psiR))>, which is averaged over for all particles for the given particle 
             species over all events
         """
-        print("collect averaged vn flow of %s ..." % particleName)
+        print("collect averaged diff vn flow of %s ..." % particleName)
         pT_range = linspace(0, 3, 31)
         pidString = self.getPidString(particleName)
         pid = self.pid_lookup[particleName]
@@ -389,7 +390,7 @@ class particleReader(object):
                         self.db.insertIntoTable(tableNamesList[itable], (pid, iorder, pTavg, vn_real, vn_real_err, vn_imag, vn_imag_err))
             self.db._dbCon.commit()  # commit changes
 
-    def collectBasicParticleAvgvnflow(self, psi_R = 0.):
+    def collectBasicParticleAvgdiffvnflow(self, psi_R = 0.):
         """
             collect particle averaged vn flow into database for commonly interested hadrons
         """
@@ -399,7 +400,8 @@ class particleReader(object):
     
     def getAvgdiffvnflow(self, particleName = "pion_p", psiR = 0., order = 2, pT_range = linspace(0.2, 2.5, 20), rapidity_range = [-0.5, 0.5], pseudorap_range = [-0.5, 0.5]):
         """
-            retrieve and interpolate the particle average vn flow data. 
+            retrieve and interpolate the particle average vn flow data with respect
+            to event plane angle, psiR. 
             Collect the average vn flow into database if data does not exist
         """
         pid = self.pid_lookup[particleName]
@@ -409,7 +411,7 @@ class particleReader(object):
         if self.db.createTableIfNotExists("Avgdiffvnetaflow", (("pid", "integer"), ("n", "integer"), ("pT", "real"), ("vn_real", "real"), ("vn_real_err", "real"), ("vn_imag", "real"), ("vn_imag_err", "real") )):
             collectFlag = True
         if collectFlag:
-            self.collectBasicParticleAvgvnflow(psiR) 
+            self.collectBasicParticleAvgdiffvnflow() 
         vndata = array(self.db._executeSQL("select pT, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgdiffvnflow where pid = %d and n = %d" % (pid, order)).fetchall())
         vnetadata = array(self.db._executeSQL("select pT, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgdiffvnetaflow where pid = %d and n = %d" % (pid, order)).fetchall())
         if(vndata.size == 0):
@@ -417,14 +419,122 @@ class particleReader(object):
             vndata = array(self.db._executeSQL("select pT, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgdiffvnflow where pid = %d and n = %d" % (pid, order)).fetchall())
             vnetadata = array(self.db._executeSQL("select pT, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgdiffvnetaflow where pid = %d and n = %d" % (pid, order)).fetchall())
         
+        vnmag = vndata[:,1]*cos(order*psiR) + vndata[:,3]*sin(order*psiR)
+        vnmag_err = sqrt((vndata[:,2]*cos(order*psiR))**2. + (vndata[:,4]*sin(order*psiR))**2.)
+        vnetamag = vnetadata[:,1]*cos(order*psiR) + vnetadata[:,3]*sin(order*psiR)
+        vnetamag_err = sqrt((vnetadata[:,2]*cos(order*psiR))**2. + (vnetadata[:,4]*sin(order*psiR))**2.)
         #interpolate results to desired pT range
-        vnpTinterp = interp(pT_range, vndata[:,0], vndata[:,1])
-        vnpTinterp_err = interp(pT_range, vndata[:,0], vndata[:,2])
-        vnpTetainterp = interp(pT_range, vnetadata[:,0], vnetadata[:,1])
-        vnpTetainterp_err = interp(pT_range, vnetadata[:,0], vnetadata[:,2])
+        vnpTinterp = interp(pT_range, vndata[:,0], vnmag)
+        vnpTinterp_err = interp(pT_range, vndata[:,0], vnmag_err)
+        vnpTetainterp = interp(pT_range, vnetadata[:,0], vnetamag)
+        vnpTetainterp_err = interp(pT_range, vnetadata[:,0], vnetamag_err)
         results = array([pT_range, vnpTinterp, vnpTinterp_err, vnpTetainterp, vnpTetainterp_err])
         return(transpose(results))
 
+    def collectAvgintevnflow(self, particleName = 'pion_p', psiR = 0.):
+        """
+            collect pT integrated <cos(n*(phi_i - psiR))> and <cos(n*(phi_i - psiR))> 
+            as a function of rapidity or pseudorapidity.
+            The ensemble average is averaged over for all particles for the given 
+            particle species over all events
+        """
+        print("collect averaged inte vn flow of %s ..." % particleName)
+        pidString = self.getPidString(particleName)
+        pid = self.pid_lookup[particleName]
+        eta_range = linspace(-3, 3, 61)
+        norder = 6
+        Nev = self.totNev
+        tableNamesList = ["Avgintevnflow", "Avgintevnetaflow"]
+        rapTypes = ['rapidity', 'pseudorapidity']
+        for itable in range(len(tableNamesList)):
+            for ieta in range(len(eta_range)-1):
+                etalow = eta_range[ieta]
+                etahigh = eta_range[ieta+1]
+                deta = etahigh - etalow
+                data = array(self.db._executeSQL("select %s, phi_p from particle_list where (%s) and (%g <= %s and %s <= %g)" % (rapTypes[itable], pidString, etalow, rapTypes[itable], rapTypes[itable], etahigh)).fetchall())
+                for iorder in range(1, norder+1):
+                    if len(data) == 0:
+                        eta_avg = (etalow + etahigh)/2.
+                        vn_real = 0.0; vn_real_err = 0.0
+                        vn_imag = 0.0; vn_imag_err = 0.0
+                    else:
+                        eta_avg = mean(data[:,0])
+                        temparray = cos(iorder*(data[:,1] - psiR))
+                        vn_real = mean(temparray)
+                        vn_real_err = std(temparray)/sqrt(Nev)
+                        temparray = sin(iorder*(data[:,1] - psiR))
+                        vn_imag = mean(temparray)
+                        vn_imag_err = std(temparray)/sqrt(Nev)
+                        self.db.insertIntoTable(tableNamesList[itable], (pid, iorder, eta_avg, vn_real, vn_real_err, vn_imag, vn_imag_err))
+            self.db._dbCon.commit()  # commit changes
+
+    def collectBasicParticleAvgintevnflow(self, psi_R = 0.):
+        """
+            collect particle averaged pT integrated vn flow into database for 
+            commonly interested hadrons
+        """
+        BasicParticleList = ['pion_p', 'kaon_p', 'proton']
+        for aParticle in BasicParticleList:
+            self.collectAvgintevnflow(particleName = aParticle, psiR = psi_R)
+    
+    def getAvgintevnflowvsrap(self, particleName = "pion_p", psiR = 0., order = 2, rap_range = linspace(-2.5, 2.5, 20)):
+        """
+            retrieve and interpolate the particle average pT integrated vn flow data
+            as a function of rapidity and pseudorapidity. 
+            Collect the average vn flow into database if data does not exist
+        """
+        pid = self.pid_lookup[particleName]
+        collectFlag = False
+        if self.db.createTableIfNotExists("Avgintevnflow", (("pid", "integer"), ("n", "integer"), ("eta", "real"), ("vn_real", "real"), ("vn_real_err", "real"), ("vn_imag", "real"), ("vn_imag_err", "real") )):
+            collectFlag = True
+        if self.db.createTableIfNotExists("Avgintevnetaflow", (("pid", "integer"), ("n", "integer"), ("eta", "real"), ("vn_real", "real"), ("vn_real_err", "real"), ("vn_imag", "real"), ("vn_imag_err", "real") )):
+            collectFlag = True
+        if collectFlag:
+            self.collectBasicParticleAvgintevnflow() 
+        vndata = array(self.db._executeSQL("select eta, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgintevnflow where pid = %d and n = %d" % (pid, order)).fetchall())
+        vnetadata = array(self.db._executeSQL("select eta, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgintevnetaflow where pid = %d and n = %d" % (pid, order)).fetchall())
+        if(vndata.size == 0):
+            self.collectAvgintevnflow(particleName)
+            vndata = array(self.db._executeSQL("select eta, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgintevnflow where pid = %d and n = %d" % (pid, order)).fetchall())
+            vnetadata = array(self.db._executeSQL("select eta, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgintevnetaflow where pid = %d and n = %d" % (pid, order)).fetchall())
+        
+        vnmag = vndata[:,1]*cos(order*psiR) + vndata[:,3]*sin(order*psiR)
+        vnmag_err = sqrt((vndata[:,2]*cos(order*psiR))**2. + (vndata[:,4]*sin(order*psiR))**2.)
+        vnetamag = vnetadata[:,1]*cos(order*psiR) + vnetadata[:,3]*sin(order*psiR)
+        vnetamag_err = sqrt((vnetadata[:,2]*cos(order*psiR))**2. + (vnetadata[:,4]*sin(order*psiR))**2.)
+        #interpolate results to desired pT range
+        vnpTinterp = interp(rap_range, vndata[:,0], vnmag)
+        vnpTinterp_err = interp(rap_range, vndata[:,0], vnmag_err)
+        vnpTetainterp = interp(rap_range, vnetadata[:,0], vnetamag)
+        vnpTetainterp_err = interp(rap_range, vnetadata[:,0], vnetamag_err)
+        results = array([rap_range, vnpTinterp, vnpTinterp_err, vnpTetainterp, vnpTetainterp_err])
+        return(transpose(results))
+    
+    def getParticleintevn(self, particleName = 'pion_p', psiR = 0., order = 2, rapRange = [-0.5, 0.5], pseudorapRange = [-0.5, 0.5]):
+        """
+            return pT-integrated vn of particle species "particleName" within given 
+            rapidity or pseudorapidity range by users
+        """
+        npoint = 50
+        Nev = self.totNev
+        
+        rapArray = linspace(rapRange[0], rapRange[1], npoint)
+        dy = rapArray[1] - rapArray[0]
+        vndata = self.getAvgintevnflowvsrap(particleName, psiR = psiR, order = order, rap_range = rapArray)
+        vn = sum(vndata[:,1])*dy
+        vn_err = mean(vndata[:,2])   # need to be improved
+        
+        pseudorapArray = linspace(pseudorapRange[0], pseudorapRange[1], npoint)
+        deta = pseudorapArray[1] - pseudorapArray[0]
+        vnetadata = self.getAvgintevnflowvsrap(particleName, psiR = psiR, order = order, rap_range = pseudorapArray)
+        vneta = sum(vnetadata[:,3])*deta
+        vneta_err = mean(vnetadata[:,4])   # need to be improved
+
+        return(vn, vn_err, vneta, vneta_err)
+
+    ################################################################################
+    # functions to collect particle event plane anisotropic flows with finite resolution 
+    ################################################################################ 
     def collectGlobalQnvectorforeachEvent(self):
         """
             collect event plane Q vector for nth order harmonic flow calculated 
@@ -662,9 +772,11 @@ if __name__ == "__main__":
         printHelpMessageandQuit()
     test = particleReader(str(argv[1]))
     print(test.getAvgdiffvnflow(particleName = "charged", psiR = 0., order = 2, pT_range = linspace(0.0, 2.0, 20)))
+    print(test.getAvgintevnflowvsrap(particleName = "charged", psiR = 0., order = 2, rap_range = linspace(-2.0, 2.0, 20)))
+    print(test.getParticleintevn('charged'))
     print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
-    #print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
-    #print(test.getParticleYield('charged'))
+    print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
+    print(test.getParticleYield('charged'))
     #test.collectGlobalResolutionFactor()
     #test.collectEventplaneflow('charged', 2)
     #test.collectTwoparticleCorrelation()
