@@ -187,6 +187,7 @@ class particleReader(object):
             return event averaged particle yield (y or eta, dN/dy, dN/(deta))
             event loop over all the hydro + UrQMD events
         """
+        print("collect particle yield of %s" % particleName)
         eta_range = linspace(-3, 3, 61)
         pidString = self.getPidString(particleName)
         etaavg = []
@@ -285,6 +286,38 @@ class particleReader(object):
         return(dNdy, dNdyerr, dNdeta, dNdetaerr)
 
     
+    ################################################################################
+    # functions to collect particle emission function
+    ################################################################################ 
+    def collectParticleYieldvsSpatialVariable(self, particleName = 'pion_p', SVtype = 'tau', SV_range = linspace(0, 12, 61), rapType = 'pseudorapidity', rap_range = [-0.5, 0.5]):
+        """
+            return event averaged particle yield per spacial variable, tau, x, y, or eta_s. 
+            Default output is (tau, dN/dtau)
+            event loop over all the hydro + UrQMD events
+        """
+        print("collect particle yield as a function of %s for %s" % (SVtype, particleName))
+        pidString = self.getPidString(particleName)
+        SV_avg = []
+        dNdSV = []
+        dNdSVerr = []
+        Nev = self.totNev
+        for iSV in range(len(SV_range)-1):
+            SVlow = SV_range[iSV]
+            SVhigh = SV_range[iSV+1]
+            dSV = SVhigh - SVlow
+            #fetch dN/dSV data
+            dNdata = self.db._executeSQL("select count(*), avg(%s) from particle_list where (%s) and (%g <= %s and %s < %g) and (%g <= %s and %s <= %g)" % (SVtype, pidString, SVlow, SVtype, SVtype, SVhigh, rap_range[0], rapType, rapType, rap_range[1])).fetchall()
+            deltaN = dNdata[0][0]
+            if dNdata[0][1] == None:
+                SV_avg.append((SVlow + SVhigh)/2.)
+            else:
+                SV_avg.append(dNdata[0][1])
+            dNdSV.append(deltaN/dSV/Nev)
+            dNdSVerr.append(sqrt(deltaN/dSV/Nev)/sqrt(Nev))
+
+        return(array([SV_avg, dNdSV, dNdSVerr]).transpose())
+    
+
     ################################################################################
     # functions to collect two particle correlation
     ################################################################################ 
@@ -777,6 +810,9 @@ if __name__ == "__main__":
     print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
     print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
     print(test.getParticleYield('charged'))
+    print(test.collectParticleYieldvsSpatialVariable(particleName = "charged"))
+    print(test.collectParticleYieldvsSpatialVariable(particleName = "charged", SVtype = 'x', SV_range = linspace(-8.0, 8.0, 81)))
+    print(test.collectParticleYieldvsSpatialVariable(particleName = "charged", SVtype = 'eta', SV_range = linspace(-8.0, 8.0, 81)))
     #test.collectGlobalResolutionFactor()
     #test.collectEventplaneflow('charged', 2)
     #test.collectTwoparticleCorrelation()
