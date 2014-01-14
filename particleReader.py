@@ -270,15 +270,15 @@ class particleReader(object):
         """
         npoint = 50
         Nev = self.totNev
-        
-        rapArray = linspace(rapRange[0], rapRange[1], npoint)
-        dy = rapArray[1] - rapArray[0]
+       
+        dy = (rapRange[1] - rapRange[0])/npoint
+        rapArray = linspace(rapRange[0], rapRange[1]-dy, npoint) + dy/2.
         dNdydata = self.getParticleYieldvsrap(particleName, rap_range = rapArray)
         dNdy = sum(dNdydata[:,1])*dy
         dNdyerr = sqrt(dNdy)/sqrt(Nev)
         
-        pseudorapArray = linspace(pseudorapRange[0], pseudorapRange[1], npoint)
-        deta = pseudorapArray[1] - pseudorapArray[0]
+        deta = (pseudorapRange[1] - pseudorapRange[0])/npoint
+        pseudorapArray = linspace(pseudorapRange[0], pseudorapRange[1] - deta, npoint) + deta/2.
         dNdetadata = self.getParticleYieldvsrap(particleName, rap_range = pseudorapArray)
         dNdeta = sum(dNdetadata[:,3])*deta
         dNdetaerr = sqrt(dNdeta)/sqrt(Nev)
