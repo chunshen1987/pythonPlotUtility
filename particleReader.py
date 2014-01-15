@@ -601,33 +601,65 @@ class particleReader(object):
     ################################################################################ 
     def collectGlobalQnvectorforeachEvent(self):
         """
-            collect event plane Q vector for nth order harmonic flow calculated 
-            using all charged particles in the event
+            collect event plane Qn and sub-event plane QnA, QnB vectors for nth order 
+            harmonic flow calculated using all charged particles in the event
+            Qn = 1/Nparticle * sum_i exp[i*n*phi_i]
         """
         particleName = "charged"
         weightTypes = ['1', 'pT']
         norder = 6
         Nev = self.totNev
         pidString = self.getPidString(particleName)
-        hydroIdList = self.db._executeSQL("select distinct hydroEvent_id from particle_list").fetchall()
-        if self.db.createTableIfNotExists("globalQnvector", (("hydroEvent_id","integer"), ("UrQMDEvent_id", "integer"), ("weightType", "text"), ("n", "integer"), ("Qn_X", "real"), ("Qn_Y", "real"))):
-            for hydroId in hydroIdList:
-                UrQMDIdList = self.db._executeSQL("select distinct UrQMDEvent_id from particle_list where hydroEvent_id = %d " % hydroId[0]).fetchall()
-                for UrQMDId in UrQMDIdList:
-                    print("processing event: %d " %UrQMDId[0])
-                    particleList = array(self.db._executeSQL("select pT, phi_p from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and (%s)" % (hydroId[0], UrQMDId[0], pidString)).fetchall())
-                    for order in range(1,norder+1):
-                        #calculate Qn vector
-                        pT = particleList[:,0]
-                        for weightType in weightTypes:
-                            if weightType == '1':
-                                weight = ones(len(pT))
-                            elif weightType == 'pT':
-                                weight = pT
-                            phi = particleList[:,1]
+        if self.db.createTableIfNotExists("globalQnvector", (("hydroEvent_id","integer"), ("UrQMDEvent_id", "integer"), ("weightType", "text"), ("n", "integer"), ("Nparticle", "integer"), ("Qn", "real"), ("Qn_psi", "real"), ("Nparticle_A", "integer"), ("subQnA", "real"), ("subQnA_psi", "real"), ("Nparticle_B", "integer"), ("subQnB", "real"), ("subQnB_psi", "real") )):
+            for hydroId in range(1, self.hydroNev+1):
+                UrQMDNev = self.db._executeSQL("select Number_of_UrQMDevents from UrQMD_NevList where hydroEventId = %d " % hydroId).fetchall()[0][0]
+                cachedNev = 1000; offset = 0
+                for UrQMDId in range(1, UrQMDNev+1):
+                    # cache small temporary database to speed up processing
+                    if UrQMDId % cachedNev == 1:
+                        if offset != 0: tempDB.closeConnection(discardChanges = True)
+                        print("Cache temporary database, please wait ...")
+                        tempDB = SqliteDB(':memory:')
+                        tempDB.createTableIfNotExists("particle_list", (("UrQMDEvent_id", "integer"), ("pT", "real"), ("phi_p", "real")))
+                        tempDB.insertIntoTable("particle_list", self.db._executeSQL("select UrQMDEvent_id, pT, phi_p from particle_list where hydroEvent_id = %d and (%d < UrQMDEvent_id and UrQMDEvent_id <= %d) and (%s)" % (hydroId, offset, offset+cachedNev, pidString)).fetchall())
+                        offset += cachedNev
+                    print("processing event: (%d, %d) " % (hydroId, UrQMDId))
+                    particleList = array(tempDB._executeSQL("select pT, phi_p from particle_list where UrQMDEvent_id = %d " % (UrQMDId)).fetchall())
+
+                    pT = particleList[:,0]
+                    phi = particleList[:,1]
+                    Nparticle = len(pT)
+                    Nparticle_A = int(Nparticle/2); Nparticle_B = Nparticle_A
+                    for weightType in weightTypes:
+                        if weightType == '1':
+                            weight = ones(len(pT))
+                        elif weightType == 'pT':
+                            weight = pT
+                        for order in range(1,norder+1):
+                            #calculate subQn vector
+                            idx = range(Nparticle)
+                            shuffle(idx); idx_A = idx[0:Nparticle_A]
+                            shuffle(idx); idx_B = idx[0:Nparticle_B]
+                            subQnA_X = 0.0; subQnA_Y = 0.0
+                            for i in idx_A:
+                                subQnA_X += weight[i]*cos(order*phi[i])
+                                subQnA_Y += weight[i]*sin(order*phi[i])
+                            subPsi_nA = arctan2(subQnA_Y, subQnA_X)/order
+                            subQnA = sqrt(subQnA_X**2. + subQnA_Y**2.)/Nparticle_A
+                            subQnB_X = 0.0; subQnB_Y = 0.0
+                            for i in idx_B:
+                                subQnB_X += weight[i]*cos(order*phi[i])
+                                subQnB_Y += weight[i]*sin(order*phi[i])
+                            subPsi_nB = arctan2(subQnB_Y, subQnB_X)/order
+                            subQnB = sqrt(subQnB_X**2. + subQnB_Y**2.)/Nparticle_B
+                        
+                            #calculate Qn vector
                             Qn_X = sum(weight*cos(order*phi))
                             Qn_Y = sum(weight*sin(order*phi))
-                            self.db.insertIntoTable("globalQnvector", (hydroId[0], UrQMDId[0], weightType, order, Qn_X, Qn_Y))
+                            Psi_n = arctan2(Qn_Y, Qn_X)/order
+                            Qn = sqrt(Qn_X**2. + Qn_Y**2.)/Nparticle
+
+                            self.db.insertIntoTable("globalQnvector", (hydroId, UrQMDId, weightType, order, Nparticle, Qn, Psi_n, Nparticle_A, subQnA, subPsi_nA, Nparticle_B, subQnB, subPsi_nB))
             self.db._dbCon.commit()  # commit changes
         else:
             print("Qn vectors from all charged particles are already collected!")
@@ -853,7 +885,8 @@ if __name__ == "__main__":
     #print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
     #print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
     #print(test.getParticleYield('charged'))
-    test.collectGlobalResolutionFactor()
+    test.collectGlobalQnvectorforeachEvent()
+    #test.collectGlobalResolutionFactor()
     #test.collectEventplaneflow('charged', 2)
     #test.collectTwoparticleCorrelation()
 
