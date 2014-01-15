@@ -116,9 +116,7 @@ class particleReader(object):
             pThigh = pT_range[ipT+1]
             dpT = pThigh - pTlow
             #fetch dN/dydpT data
-            whereClause = "(%s)" % pidString
-            whereClause += " and (%g<=pT and pT<=%g) and (%g<=rapidity and rapidity<=%g)" % (pTlow, pThigh, rapidity_range[0], rapidity_range[1])
-            tempdata = self.db.selectFromTable("particle_list", "count(*), avg(pT)", whereClause=whereClause)
+            tempdata = self.db._executeSQL("select count(*), avg(pT) from particle_list where (%s) and (%g <= pT and pT < %g) and (%g <= rapidity and rapidity <= %g)" % (pidString, pTlow, pThigh, rapidity_range[0], rapidity_range[1])).fetchall()
             deltaN = tempdata[0][0]
             if tempdata[0][1] == None:
                 pTavg.append((pTlow + pThigh)/2.)
@@ -127,9 +125,7 @@ class particleReader(object):
             dNdydpT.append(deltaN/dpT/Nev)
             dNdydpTerr.append(sqrt(deltaN/dpT/Nev)/sqrt(Nev))
             #fetch dN/detadpT data
-            whereClause = "(%s)" % pidString
-            whereClause += " and (%g<=pT and pT<=%g) and (%g<=pseudorapidity and pseudorapidity<=%g)" % (pTlow, pThigh, pseudorap_range[0], pseudorap_range[1])
-            tempdata = self.db.selectFromTable("particle_list", "count(*), avg(pT)", whereClause=whereClause)
+            tempdata = self.db._executeSQL("select count(*), avg(pT) from particle_list where (%s) and (%g <= pT and pT < %g) and (%g <= pseudorapidity and pseudorapidity <= %g)" % (pidString, pTlow, pThigh, pseudorap_range[0], pseudorap_range[1])).fetchall()
             if tempdata[0][1] == None:
                 pTetaavg.append((pTlow + pThigh)/2.)
             else:
@@ -289,7 +285,7 @@ class particleReader(object):
     ################################################################################
     # functions to collect particle emission function
     ################################################################################ 
-    def collectParticleYieldvsSpatialVariable(self, particleName = 'pion_p', SVtype = 'tau', SV_range = linspace(0, 12, 61), rapType = 'pseudorapidity', rap_range = [-0.5, 0.5]):
+    def collectParticleYieldvsSpatialVariable(self, particleName = 'pion_p', SVtype = 'tau', SV_range = linspace(0, 12, 61), rapType = 'rapidity', rap_range = [-0.5, 0.5]):
         """
             return event averaged particle yield per spacial variable, tau, x, y, or eta_s. 
             Default output is (tau, dN/dtau)
@@ -317,6 +313,38 @@ class particleReader(object):
 
         return(array([SV_avg, dNdSV, dNdSVerr]).transpose())
     
+    def getParticleYieldvsSpatialVariable(self, particleName = 'pion_p', SVtype = 'tau', SV_range = linspace(0, 12, 61), rapType = 'rapidity', rap_range = [-0.5, 0.5]):
+        """
+            store and retrieve event averaged particle yield per spacial variable, 
+            tau, x, y, or eta_s. 
+            Default output is (tau, dN/dtau)
+            event loop over all the hydro + UrQMD events
+        """
+        pidString = self.getPidString(particleName)
+        pid = self.pid_lookup[particleName]
+        Nev = self.totNev
+        if self.db.createTableIfNotExists("particleEmission_d%s_%s" % (SVtype, rapType), (("pid","integer"), ("%s" % SVtype, "real"), ("dNdy", "real"), ("dNdyerr", "real") )):
+            dNdata = self.collectParticleYieldvsSpatialVariable(particleName, SVtype, SV_range, rapType, rap_range)
+            for i in range(len(dNdata[:,0])):
+                self.db.insertIntoTable("particleEmission_d%s_%s" % (SVtype, rapType), (pid, dNdata[i,0], dNdata[i,1], dNdata[i,2]))
+            self.db._dbCon.commit()  # commit changes
+        else:
+            dNdata = array(self.db._executeSQL("select %s, dNdy, dNdyerr from particleEmission_d%s_%s where pid = %d" % (SVtype, SVtype, rapType, pid)).fetchall())
+            if dNdata.size == 0:
+                dNdata = self.collectParticleYieldvsSpatialVariable(particleName, SVtype, SV_range, rapType, rap_range)
+                if dNdata.size == 0:
+                    print("can not find the particle %s" % particleName)
+                    return(array([]))
+                else:
+                    for i in range(len(dNdata[:,0])):
+                        self.db.insertIntoTable("particleEmission_d%s_%s" % (SVtype, rapType), (pid, dNdata[i,0], dNdata[i,1], dNdata[i,2]))
+                    self.db._dbCon.commit()  # commit changes
+            else:
+                dNdSV = interp(SV_range, dNdata[:,0], dNdata[:,1])
+                dNdSVerr = interp(SV_range, dNdata[:,0], dNdata[:,2])
+                dNdata = array([SV_range, dNdSV, dNdSVerr]).transpose()
+
+        return(dNdata)
 
     ################################################################################
     # functions to collect two particle correlation
