@@ -6,6 +6,7 @@ from DBR import SqliteDB
 from numpy import *
 from random import shuffle
 import scipy.special
+import time
 
 #define colors
 purple = "\033[95m"
@@ -52,6 +53,12 @@ class particleReader(object):
             self.totNev = self.db._executeSQL("select Nev_tot from number_of_events").fetchall()[0][0]
             self.hydroNev = self.db._executeSQL("select Nev_hydro from number_of_events").fetchall()[0][0]
 
+        if self.db.createTableIfNotExists("UrQMD_NevList", (("hydroEventId", "integer"), ("Number_of_UrQMDevents", "integer"))):
+            for hydroEventId in range(1, self.hydroNev+1):
+                UrQMDNev = self.getNumberOfUrQMDEvents(hydroEventId)
+                self.db.insertIntoTable("UrQMD_NevList", (int(self.hydroNev), int(UrQMDNev)))
+            self.db._dbCon.commit()  # commit changes
+
     ################################################################################
     # functions to get number of events
     ################################################################################ 
@@ -76,7 +83,7 @@ class particleReader(object):
         hydroEventid = self.db._executeSQL("select distinct hydroEvent_id from particle_list").fetchall()
         Nev = 0
         for iev in range(len(hydroEventid)):
-           Nev += self.getNumberOfUrQMDEvents(hydroEventid[iev][0])
+            Nev += self.getNumberOfUrQMDEvents(hydroEventid[iev][0])
         return(Nev)
 
     def getPidString(self, particleName = 'pion_p'):
@@ -339,10 +346,6 @@ class particleReader(object):
                     for i in range(len(dNdata[:,0])):
                         self.db.insertIntoTable("particleEmission_d%s_%s" % (SVtype, rapType), (pid, dNdata[i,0], dNdata[i,1], dNdata[i,2]))
                     self.db._dbCon.commit()  # commit changes
-            else:
-                dNdSV = interp(SV_range, dNdata[:,0], dNdata[:,1])
-                dNdSVerr = interp(SV_range, dNdata[:,0], dNdata[:,2])
-                dNdata = array([SV_range, dNdSV, dNdSVerr]).transpose()
 
         return(dNdata)
 
@@ -681,15 +684,23 @@ class particleReader(object):
         """
         Nev = self.totNev
         pidString = self.getPidString(particleName)
-        hydroIdList = self.db._executeSQL("select distinct hydroEvent_id from particle_list").fetchall()
         num_of_order  = order_range[1] - order_range[0] + 1
         resolutionFactor_sub = zeros(num_of_order)
-        for hydroId in hydroIdList:
-            UrQMDIdList = self.db._executeSQL("select distinct UrQMDEvent_id from particle_list where hydroEvent_id = %d " % hydroId[0]).fetchall()
-            for UrQMDId in UrQMDIdList:
-                print("processing event: (%d, %d) " % (hydroId[0],UrQMDId[0]))
-                particleList = array(self.db._executeSQL("select pT, phi_p from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and (%s) and (%g <= pT and pT <= %g) and (%g <= %s and %s <= %g)" % (hydroId[0], UrQMDId[0], pidString, pT_range[0], pT_range[1], rap_range[0], rapType, rapType, rap_range[1])).fetchall())
-                
+        for hydroId in range(1, self.hydroNev+1):
+            UrQMDNev = self.db._executeSQL("select Number_of_UrQMDevents from UrQMD_NevList where hydroEventId = %d " % hydroId).fetchall()[0][0]
+            cachedNev = 1000; offset = 0
+            for UrQMDId in range(1, UrQMDNev+1):
+                print("processing event: (%d, %d) " % (hydroId, UrQMDId))
+                # cache small temporary database to speed up processing
+                if UrQMDId % cachedNev == 1:
+                    if offset != 0: tempDB.closeConnection(discardChanges = True)
+                    print("Cache temporary database, please wait ...")
+                    tempDB = SqliteDB(':memory:')
+                    tempDB.createTableIfNotExists("particle_list", (("UrQMDEvent_id", "integer"), ("pT", "real"), ("phi_p", "real")))
+                    tempDB.insertIntoTable("particle_list", self.db._executeSQL("select UrQMDEvent_id, pT, phi_p from particle_list where hydroEvent_id = %d and (%d < UrQMDEvent_id and UrQMDEvent_id <= %d) and (%s) and (%g <= pT and pT <= %g) and (%g <= %s and %s <= %g)" % (hydroId, offset, offset+cachedNev, pidString, pT_range[0], pT_range[1], rap_range[0], rapType, rapType, rap_range[1])).fetchall())
+                    offset += cachedNev
+                particleList = array(tempDB._executeSQL("select pT, phi_p from particle_list where UrQMDEvent_id = %d " % (UrQMDId)).fetchall())
+
                 #calculate resolution factor
                 pT = particleList[:,0]
                 phi = particleList[:,1]
@@ -832,16 +843,17 @@ if __name__ == "__main__":
     if len(argv) < 2:
         printHelpMessageandQuit()
     test = particleReader(str(argv[1]))
-    print(test.getAvgdiffvnflow(particleName = "charged", psiR = 0., order = 2, pT_range = linspace(0.0, 2.0, 20)))
-    print(test.getAvgintevnflowvsrap(particleName = "charged", psiR = 0., order = 2, rap_range = linspace(-2.0, 2.0, 20)))
-    print(test.getParticleintevn('charged'))
-    print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
-    print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
-    print(test.getParticleYield('charged'))
-    print(test.collectParticleYieldvsSpatialVariable(particleName = "charged"))
-    print(test.collectParticleYieldvsSpatialVariable(particleName = "charged", SVtype = 'x', SV_range = linspace(-8.0, 8.0, 81)))
-    print(test.collectParticleYieldvsSpatialVariable(particleName = "charged", SVtype = 'eta', SV_range = linspace(-8.0, 8.0, 81)))
-    #test.collectGlobalResolutionFactor()
+    #for aPart in ['pion_p', 'kaon_p', 'proton']:
+    #    print(test.getParticleYieldvsSpatialVariable(particleName = aPart, SVtype = 'tau', SV_range = linspace(0.0, 15.0, 76)))
+    #    print(test.getParticleYieldvsSpatialVariable(particleName = aPart, SVtype = 'x', SV_range = linspace(-13.0, 13.0, 101)))
+    #    print(test.getParticleYieldvsSpatialVariable(particleName = aPart, SVtype = 'eta', SV_range = linspace(-5.0, 5.0, 51)))
+    #print(test.getAvgdiffvnflow(particleName = "charged", psiR = 0., order = 2, pT_range = linspace(0.0, 2.0, 20)))
+    #print(test.getAvgintevnflowvsrap(particleName = "charged", psiR = 0., order = 2, rap_range = linspace(-2.0, 2.0, 20)))
+    #print(test.getParticleintevn('charged'))
+    #print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
+    #print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
+    #print(test.getParticleYield('charged'))
+    test.collectGlobalResolutionFactor()
     #test.collectEventplaneflow('charged', 2)
     #test.collectTwoparticleCorrelation()
 
