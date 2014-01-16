@@ -771,17 +771,15 @@ class particleReader(object):
             collect and store the full resolution factors calculated using all charged particles
             from all the events for order n = 1-6
         """
-        particleName = "charged"
         weightTypes = ['1', 'pT']
         norder = 6
-        oversampleFactor = 10
         if self.db.createTableIfNotExists("resolutionFactorR", (("weightType", "text"), ("n", "integer"), ("R","real"))):
-            for weightType in weightTypes:
-                R = self.calculcateResolutionfactor(particleName, order_range = [1, norder], oversampling = oversampleFactor, weightType = weightType, pT_range = [0.0, 4.0], rapType = "pseudorapidity", rap_range = [-4.0, 4.0])
-
-                for iorder in range(len(R)):
-                    order = iorder + 1
-                    self.db.insertIntoTable("resolutionFactorR", (weightType, order, R[iorder]))
+            for iorder in range(1, norder+1):
+                for weightType in weightTypes:
+                    subQn_data = array(self.db._executeSQL("select subQnA_psi, subQnB_psi from globalQnvector where weightType = '%s and n = %d" % (weightType, iorder)).fetchall())
+                    resolutionFactor_sub = sqrt(mean(cos(iorder*(subQn_data[:,0] - subQn_data[:,1]))))
+                    resolutionFactor_full = self.getFullplaneResolutionFactor(resolutionFactor_sub, 2.0)
+                    self.db.insertIntoTable("resolutionFactorR", (weightType, iorder, resolutionFactor_full))
             self.db._dbCon.commit()  # commit changes
         else:
             print("Resolution factors from all charged particles are already collected!")
@@ -885,8 +883,8 @@ if __name__ == "__main__":
     #print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
     #print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
     #print(test.getParticleYield('charged'))
-    test.collectGlobalQnvectorforeachEvent()
-    #test.collectGlobalResolutionFactor()
+    #test.collectGlobalQnvectorforeachEvent()
+    test.collectGlobalResolutionFactor()
     #test.collectEventplaneflow('charged', 2)
     #test.collectTwoparticleCorrelation()
 
