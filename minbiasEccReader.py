@@ -41,7 +41,7 @@ class minbiasEccReader(object):
         self.Nev = self.getNumberofEvents()
      
     def getNumberofEvents(self):
-        Nev = self.db._executeSQL("select count(*) from collisionParameters").fetchall()[0][0]
+        Nev = self.db.executeSQLquery("select count(*) from collisionParameters").fetchall()[0][0]
         return(Nev)
 
     def cutCentralitieswitheccStatistics(self, cutType, multiplicityFactor = 1.0):
@@ -60,14 +60,14 @@ class minbiasEccReader(object):
             upperbound = self.centralityBoundaries[icen][1]
             nsample = int(nevent*(upperbound - lowerbound)/100)-1
             noffset = int(nevent*lowerbound/100)
-            fetchedData = array(self.db._executeSQL("select Npart, b, total_entropy from collisionParameters order by -%s limit %d offset %d" % (cutType, nsample, noffset)).fetchall())
+            fetchedData = array(self.db.executeSQLquery("select Npart, b, total_entropy from collisionParameters order by -%s limit %d offset %d" % (cutType, nsample, noffset)).fetchall())
             cenCentral = (upperbound + lowerbound)/2.
             Npartmean = mean(fetchedData[:,0])
             Npartmin = min(fetchedData[:,0]); Npartmax = max(fetchedData[:,0])
             bmin = min(fetchedData[:,1]); bmax = max(fetchedData[:,1])
             dSdymin = min(fetchedData[:,2])/multiplicityFactor; dSdymax = max(fetchedData[:,2])/multiplicityFactor
             centralityOutput.write("%6.4f  %d  %d  %d  %18.8e  %18.8e  %18.8e  %18.8e \n" % (cenCentral, Npartmean, Npartmin, Npartmax, dSdymin, dSdymax, bmin, bmax))
-            fetchedData = array(self.db._executeSQL("select ecc_id, n, ecc_real, ecc_imag from eccentricities where event_id in (select event_id from collisionParameters order by -collisionParameters.%s limit %d offset %d)" % (cutType, nsample, noffset)).fetchall())
+            fetchedData = array(self.db.executeSQLquery("select ecc_id, n, ecc_real, ecc_imag from eccentricities where event_id in (select event_id from collisionParameters order by -collisionParameters.%s limit %d offset %d)" % (cutType, nsample, noffset)).fetchall())
             for eccType in range(1,3):
                 tempidx = (fetchedData[:,0] == eccType)
                 tempdata = fetchedData[tempidx, :]
@@ -102,11 +102,11 @@ class minbiasEccReader(object):
         nsample = int(nevent*(upperbound - lowerbound)/100)-1
         noffset = int(nevent*lowerbound/100)
         if disType in ['Npart', 'Ncoll', 'b', 'total_entropy']:
-            fetchedData = array(self.db._executeSQL("select %s from collisionParameters order by -%s limit %d offset %d" % (disType, cutType, nsample, noffset)).fetchall())
+            fetchedData = array(self.db.executeSQLquery("select %s from collisionParameters order by -%s limit %d offset %d" % (disType, cutType, nsample, noffset)).fetchall())
         elif 'ecc' in disType:
             temp = disType.split('_')
             eccorder = int(temp[1])
-            tempData = array(self.db._executeSQL("select ecc_real, ecc_imag from eccentricities where ecc_id = 2 and n = %d and event_id in (select event_id from collisionParameters order by -collisionParameters.%s limit %d offset %d)" % (eccorder, cutType, nsample, noffset)).fetchall())
+            tempData = array(self.db.executeSQLquery("select ecc_real, ecc_imag from eccentricities where ecc_id = 2 and n = %d and event_id in (select event_id from collisionParameters order by -collisionParameters.%s limit %d offset %d)" % (eccorder, cutType, nsample, noffset)).fetchall())
             fetchedData = sqrt(tempData[:,0]**2 + tempData[:,1]**2)
             
         binnedData, binnedData_err = getBinnedAveragedDatawithErrorbars(fetchedData, nbin)

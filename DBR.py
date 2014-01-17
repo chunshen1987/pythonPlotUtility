@@ -92,6 +92,30 @@ class SqliteDB(object):
             print(parameterTuple)
             raise
 
+    def executeSQLquery(self, cmdString, parameterTuple=(), many=False):
+        """
+            Execute an SQLite command "cmdString" with parameters
+            "parameterTuple". This function will open a connection if it is not
+            already open, but it will not close the connection since frequent
+            open/close connection action with each query is very inefficient and
+            SQL commands are best to be run in batch. When "many" is set to True
+            the executemany function is called.
+        """
+        # check if the connection is open
+        if not self._dbCon:
+            self._openConnection()
+        # execute,and throw exceptions if error occurs
+        try:
+            if not many:
+                return self._dbCon.execute(cmdString, parameterTuple)
+            else:
+                return self._dbCon.executemany(cmdString, parameterTuple)
+        except sqlite3.OperationalError:
+            print("Error executing: %s" % cmdString)
+            print("With parameters:")
+            print(parameterTuple)
+            raise
+
     def getAllTableNames(self):
         """
             Return a list of table names from the registered database.
