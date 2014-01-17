@@ -1064,6 +1064,111 @@ class particleReader(object):
     ################################################################################
     # functions to collect two particle correlation
     ################################################################################ 
+    def collectTwoparticleCumulantflow(self, particleName = 'pion_p', pT_range = [0.0, 3.0], rap_range = [-0.5, 0.5], rapType = "rapidity"):
+        """
+            collect nth order pT differential two particle cumulant harmonic flow, vn{2}(pT)
+            the two particles are taken from the same bin
+        """
+        print("Collecting differential two particle cumulant flow vn{2} for %s ..." % particleName)
+        norder = 6; npT = 31
+        weightTypes = ['1', 'pT']
+        pidString = self.getPidString(particleName)
+
+        vnpT = linspace(pT_range[0], pT_range[1], npT)
+        pTmean = zeros([npT-1]); NevpT = zeros(npT-1)
+        vn_obs = zeros([norder, npT-1])
+        vn_obs_sq = zeros([norder, npT-1])
+        vn_obs_err = zeros([norder, npT-1])
+
+        for hydroId in range(1, self.hydroNev+1):
+            UrQMDNev = self.db.executeSQLquery("select Number_of_UrQMDevents from UrQMD_NevList where hydroEventId = %d " % hydroId).fetchall()[0][0]
+            cachedNev = 1000; offset = 0
+            for UrQMDId in range(1, UrQMDNev+1):
+                print("processing event: (%d, %d) " % (hydroId, UrQMDId))
+                # cache small temporary database to speed up processing
+                if UrQMDId % cachedNev == 1:
+                    if offset != 0: tempDB.closeConnection(discardChanges = True)
+                    print("Cache temporary database, please wait ...")
+                    tempDB = SqliteDB(':memory:')
+                    tempDB.createTableIfNotExists("particle_list", (("UrQMDEvent_id", "integer"), ("pT", "real"), ("phi_p", "real")))
+                    tempDB.insertIntoTable("particle_list", self.db.executeSQLquery("select UrQMDEvent_id, pT, phi_p from particle_list where hydroEvent_id = %d and (%d < UrQMDEvent_id and UrQMDEvent_id <= %d) and (%s) and (%g <= pT and pT <= %g) and (%g <= %s and %s <= %g)" % (hydroId, offset, offset+cachedNev, pidString, pT_range[0], pT_range[1], rap_range[0], rapType, rapType, rap_range[1])).fetchall())
+                    offset += cachedNev
+
+                for ipT in range(npT-1):
+                    pTlow = vnpT[ipT]; pThigh = vnpT[ipT+1]
+                    particleList = array(tempDB.executeSQLquery("select pT, phi_p from particle_list where UrQMDEvent_id = %d and (%g <= pT and pT <= %g)" % (UrQMDId, pTlow, pThigh)).fetchall())
+                    
+                    if(particleList.size == 0):
+                        pTmean[ipT] = (pTlow + pThigh)/2.
+                    elif(len(particleList[:,0]) == 1):
+                        pTmean[ipT] = mean(pT)
+                    else:
+                        NevpT[ipT] += 1
+                        pT = particleList[:,0]
+                        pTmean[ipT] = mean(pT)
+                        phi = particleList[:,1]
+                        Nparticle = len(pT)
+                        Npairs = Nparticle*(Nparticle - 1)/2.
+
+                        for iorder in range(1, norder + 1):
+                            temp = 0.0
+                            for ipart in range(Nparticle-1):
+                                for iassopart in range(ipart+1, Nparticle):
+                                    temp += cos(iorder*(phi[ipart] - phi[iassopart]))
+
+                            vn_obs[iorder-1] += temp/Npairs
+                            vn_obs_sq[iorder-1] += temp*temp/Npairs
+        
+        for ipT in range(npT-1):
+            if NevpT[ipT] != 0:
+                vn_obs[:,ipT] = vn_obs[:,ipT]/NevpT[ipT]
+                vn_obs_err[:,ipT] = sqrt(vn_obs_sq[:,ipT]/NevpT[ipT] - (vn_obs[:,ipT])**2.)/sqrt(NevpT[ipT])
+        
+        vn_2 = zeros([norder, npT-1])
+        vn_2_err = zeros([norder, npT-1])
+        for iorder in range(norder):
+            for ipT in range(npT-1):
+                if abs(vn_obs[iorder, ipT]) > 1e-8:
+                    vn_2 = sqrt(vn_obs)
+                    vn_2_err = vn_obs_err/(2.*sqrt(vn_obs))
+
+        return(pTmean, vn_2, vn_2_err)
+
+    def getdiffTwoparticlecumulantflow(self, particleName = 'pion_p', order = 2, weightType = '1', pT_range = linspace(0.05, 2.5, 20), rap_range = [-0.5, 0.5], rapType = "rapidity"):
+        """
+            retrieve nth order two particle cumulant flow data from database for the 
+            given species of particles with given pT_range.
+            if no results is found, it will collect vn{2}(pT) and store it into database
+        """
+        pid = self.pid_lookup[particleName]
+        collectFlag = False
+        if rapType == 'rapidity':
+            tableName = "diffvn2"
+        elif rapType == 'pseudorapidity':
+            tableName = "diffvn2eta"
+        if self.db.createTableIfNotExists(tableName, (("pid", "integer"), ("n", "integer"), ("pT", "real"), ("vn", "real"), ("vn_err", "real") )):
+            collectFlag = True
+        else:
+            vn2data = array(self.db.executeSQLquery("select pT, vn, vn_err from %s where pid = %d and n = %d" % (tableName, pid, order)).fetchall())
+            if vn2data.size == 0:
+                collectFlag = True
+        if collectFlag:
+            pT, vn2, vn2_err = self.collectTwoparticleCumulantflow(particleName = particleName, rapType = rapType) 
+            for iorder in range(len(vn2[:,0])):
+                for ipT in range(len(pT)):
+                    self.db.insertIntoTable(tableName, (pid, iorder+1, pT[ipT], vn2[iorder, ipT], vn2_err[iorder, ipT]))
+            self.db._dbCon.commit()
+            vn2data = array([pT, vn2[order-1,:], vn2_err[order-1,:]]).transpose()
+            if vn2data.size == 0:
+                print("There is no record for different event plane flow vn for %s" % particleName)
+                return None
+      
+        #interpolate results to desired pT range
+        vnpTinterp = interp(pT_range, vn2data[:,0], vn2data[:,1])
+        vnpTinterp_err = interp(pT_range, vn2data[:,0], vn2data[:,2])
+        results = array([pT_range, vnpTinterp, vnpTinterp_err])
+        return(transpose(results))
+
     def collectTwoparticleCorrelation(self, particleName = 'pion_p', pT_range = [1.0, 2.0]):
         """
             collect two particle correlation function C(\delta phi, \delta eta) from 
@@ -1161,6 +1266,9 @@ if __name__ == "__main__":
     #print(test.getdiffScalarProductflow(particleName = 'pion_p'))
     #print(test.getdiffScalarProductflow(particleName = 'kaon_p'))
     #print(test.getdiffScalarProductflow(particleName = 'proton'))
+    print(test.getdiffTwoparticlecumulantflow(particleName = 'pion_p'))
+    print(test.getdiffTwoparticlecumulantflow(particleName = 'kaon_p'))
+    print(test.getdiffTwoparticlecumulantflow(particleName = 'proton_p'))
     #test.collectEventplaneflow('charged', 2)
-    test.collectTwoparticleCorrelation()
+    #test.collectTwoparticleCorrelation()
 
