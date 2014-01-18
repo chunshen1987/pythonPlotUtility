@@ -32,7 +32,7 @@ def getBinnedAveragedDatawithErrorbars(dataMatrix, nbin, bincol=0):
    binEdges = linspace(binMin, binMax, nbin+1)
    
    binnedData = zeros([nbin, ncol+2])
-   binnedData_err = zeros([nbin, ncol])
+   binnedData_err = zeros([nbin, ncol+2])
 
    for idxbin in range(nbin):
       binWidth = binEdges[idxbin+1] - binEdges[idxbin]
@@ -49,6 +49,8 @@ def getBinnedAveragedDatawithErrorbars(dataMatrix, nbin, bincol=0):
       if nsamples == 0:
          binnedData[idxbin, bincol] = binmid
       binnedData[idxbin, ncol] = nsamples
-      binnedData[idxbin, ncol+1] = nsamples/binWidth/ntotal
+      binnedData[idxbin, ncol+1] = (float(nsamples)/ntotal)/binWidth
+      binnedData_err[idxbin, ncol] = sqrt(float(nsamples)/ntotal)*ntotal
+      binnedData_err[idxbin, ncol+1] = sqrt(float(nsamples)/ntotal)/binWidth/sqrt(ntotal)
    return binnedData, binnedData_err
 
