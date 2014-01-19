@@ -928,6 +928,131 @@ class particleReader(object):
         results = array([pT_range, vnpTinterp, vnpTinterp_err])
         return(transpose(results))
                 
+    def collectdiffsubEventplaneflow(self, particleName = 'pion_p', pT_range = [0.0, 3.0], rap_range = [-0.5, 0.5], rapType = "rapidity"):
+        """
+            collect nth order pT differential subevent plane harmonic flow, vn{subEP}(pT)
+            event plane angle is determined by all charged particles in the subevent
+            from with the eta gap
+        """
+        print("Collecting differential event plane flow vn{subEP} for %s ..." % particleName)
+        Nev = self.totNev
+        norder = 6; npT = 30
+        weightTypes = ['1', 'pT']
+        pidString = self.getPidString(particleName)
+
+        pTBoundary = linspace(pT_range[0], pT_range[1], npT+1)
+        pTmean = zeros([npT])
+        vn_obs = zeros([norder, npT]); vn_obs_pTweight = zeros([norder, npT])
+        vn_obs_sq = zeros([norder, npT]); vn_obs_pTweight_sq = zeros([norder, npT])
+        
+        cachedNev = 1000; tempDBFlag = False
+        for hydroId in range(1, self.hydroNev+1):
+            UrQMDNev = self.db.executeSQLquery("select Number_of_UrQMDevents from UrQMD_NevList where hydroEventId = %d " % hydroId).fetchall()[0][0]
+            offset = 0
+            for UrQMDId in range(1, UrQMDNev+1):
+                # cache small temporary database to speed up processing
+                if UrQMDId % cachedNev == 1:
+                    if tempDBFlag: tempDB.closeConnection(discardChanges = True)
+                    print("Cache temporary database, please wait ...")
+                    tempDB = SqliteDB(':memory:'); tempDBFlag = True
+                    tempDB.createTableIfNotExists("particle_list", (("UrQMDEvent_id", "integer"), ("pT", "real"), ("phi_p", "real")))
+                    tempDB.insertIntoTable("particle_list", self.db.executeSQLquery("select UrQMDEvent_id, pT, phi_p from particle_list where hydroEvent_id = %d and (%d < UrQMDEvent_id and UrQMDEvent_id <= %d) and (%s) and (%g <= pT and pT < %g) and (%g <= %s and %s <= %g)" % (hydroId, offset, offset+cachedNev, pidString, pT_range[0], pT_range[1], rap_range[0], rapType, rapType, rap_range[1])).fetchall())
+                    offset += cachedNev
+                
+                print("processing event: (%d, %d) " % (hydroId, UrQMDId))
+                subQnA_psi = zeros([2, norder])
+                for iorder in range(1, norder + 1):
+                    QnVector = array(self.db.executeSQLquery("select subQnA_psi from globalQnvector where hydroEvent_id = %d and UrQMDEvent_id = %d and weightType = '1' and n = %d" % (hydroId, UrQMDId, iorder)).fetchall())
+                    subQnA_psi[0, iorder-1] = QnVector[0,0]
+                    QnVector = array(self.db.executeSQLquery("select subQnA_psi from globalQnvector where hydroEvent_id = %d and UrQMDEvent_id = %d and weightType = 'pT' and n = %d" % (hydroId, UrQMDId, iorder)).fetchall())
+                    subQnA_psi[1, iorder-1] = QnVector[0,0]
+                 
+                for ipT in range(npT):
+                    pTlow = pTBoundary[ipT]; pThigh = pTBoundary[ipT+1]
+                    particleList = array(tempDB.executeSQLquery("select pT, phi_p from particle_list where UrQMDEvent_id = %d and (%g <= pT and pT < %g)" % (UrQMDId, pTlow, pThigh)).fetchall())
+                    
+                    if(particleList.size == 0):  # no particle in the event
+                        pTmean[ipT] = (pTlow + pThigh)/2.
+                    else:
+                        pT = particleList[:,0]
+                        phi = particleList[:,1]
+                        pTmean[ipT] = mean(pT)
+                        Nparticle = len(pT)
+                        for weightType in weightTypes:
+                            if weightType == '1':
+                                weight = ones(len(pT))
+                                iweight = 0
+                            elif weightType == 'pT':
+                                weight = pT
+                                iweight = 1
+                            for iorder in range(1, norder + 1):
+                                #calculate subevent plane vn
+                                psi_n = subQnA_psi[iweight, iorder-1]
+                                vntemp = sum(weight*cos(iorder*(phi - psi_n)))
+                                vntemp = vntemp/Nparticle
+                                if weightType == '1':
+                                    vn_obs[iorder-1][ipT] += vntemp
+                                    vn_obs_sq[iorder-1][ipT] += vntemp**2
+                                elif weightType == 'pT':
+                                    vn_obs_pTweight[iorder-1][ipT] += vntemp
+                                    vn_obs_pTweight_sq[iorder-1][ipT] += vntemp**2
+        vn_obs = vn_obs/Nev
+        vn_obs_err = sqrt(vn_obs_sq/Nev - (vn_obs)**2.)/sqrt(Nev)
+        vn_obs_pTweight = vn_obs_pTweight/Nev
+        vn_obs_pTweight_err = sqrt(vn_obs_pTweight_sq/Nev - (vn_obs_pTweight)**2.)/sqrt(Nev)
+
+        vnEP = zeros([norder, npT]); vnEP_pTweight = zeros([norder, npT])
+        vnEP_err = zeros([norder, npT]); vnEP_pTweight_err = zeros([norder, npT])
+        for iorder in range(1, norder + 1):
+            resolutionFactor = self.db.executeSQLquery("select R from resolutionFactorR where weightType = '1' and n = %d" % (iorder)).fetchall()[0][0]
+            resolutionFactor_pTweight = self.db.executeSQLquery("select R from resolutionFactorR where weightType = 'pT' and n = %d" % (iorder)).fetchall()[0][0]
+            for ipT in range(npT):
+                vnEP[iorder-1, ipT] = vn_obs[iorder-1, ipT]/resolutionFactor
+                vnEP_err[iorder-1, ipT] = vn_obs_err[iorder-1, ipT]/resolutionFactor
+                vnEP_pTweight[iorder-1, ipT] = vn_obs_pTweight[iorder-1, ipT]/resolutionFactor_pTweight
+                vnEP_pTweight_err[iorder-1, ipT] = vn_obs_pTweight_err[iorder-1, ipT]/resolutionFactor_pTweight
+        
+        return(pTmean, vnEP, vnEP_err, vnEP_pTweight, vnEP_pTweight_err)
+    
+    def getdiffsubEventplaneflow(self, particleName = 'pion_p', order = 2, weightType = '1', pT_range = linspace(0.05, 2.5, 20), rap_range = [-0.5, 0.5], rapType = "rapidity"):
+        """
+            retrieve nth order subevent plane flow data from database for the given species 
+            of particles with given pT_range.
+            if no results is found, it will collect vn{subEP}(pT) and store it into database
+        """
+        pid = self.pid_lookup[particleName]
+        collectFlag = False
+        if rapType == 'rapidity':
+            tableName = "diffvnsubEP"
+        elif rapType == 'pseudorapidity':
+            tableName = "diffvnsubEPeta"
+        if self.db.createTableIfNotExists(tableName, (("pid", "integer"), ("weightType", "text"), ("n", "integer"), ("pT", "real"), ("vn", "real"), ("vn_err", "real") )):
+            collectFlag = True
+        else:
+            vnEPdata = array(self.db.executeSQLquery("select pT, vn, vn_err from %s where pid = %d and weightType = '%s' and n = %d" % (tableName, pid, weightType, order)).fetchall())
+            if vnEPdata.size == 0:
+                collectFlag = True
+        if collectFlag:
+            pT, vnEP, vnEP_err, vnEP_pTweight, vnEP_pTweight_err = self.collectdiffsubEventplaneflow(particleName = particleName, rapType = rapType) 
+            for iorder in range(len(vnEP[:,0])):
+                for ipT in range(len(pT)):
+                    self.db.insertIntoTable(tableName, (pid, '1', iorder+1, pT[ipT], vnEP[iorder, ipT], vnEP_err[iorder, ipT]))
+                    self.db.insertIntoTable(tableName, (pid, 'pT', iorder+1, pT[ipT], vnEP_pTweight[iorder, ipT], vnEP_pTweight_err[iorder, ipT]))
+            self.db._dbCon.commit()
+            if weightType == '1':
+                vnEPdata = array([pT, vnEP[order-1,:], vnEP_err[order-1,:]]).transpose()
+            elif weightType == 'pT':
+                vnEPdata = array([pT, vnEP_pTweight[order-1], vnEP_pTweight_err[order-1,:]]).transpose()
+            if vnEPdata.size == 0:
+                print("There is no record for different event plane flow vn for %s" % particleName)
+                return None
+      
+        #interpolate results to desired pT range
+        vnpTinterp = interp(pT_range, vnEPdata[:,0], vnEPdata[:,1])
+        vnpTinterp_err = interp(pT_range, vnEPdata[:,0], vnEPdata[:,2])
+        results = array([pT_range, vnpTinterp, vnpTinterp_err])
+        return(transpose(results))
+
     def collectdiffScalarProductflow(self, particleName = 'pion_p', pT_range = [0.0, 3.0], rap_range = [-0.5, 0.5], rapType = "rapidity"):
         """
             collect nth order pT differential scalar product harmonic flow, vn{SP}(pT)
@@ -1263,11 +1388,14 @@ if __name__ == "__main__":
     #print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
     #print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
     #print(test.getParticleYield('charged'))
-    test.collectGlobalQnvectorforeachEvent()
+    #test.collectGlobalQnvectorforeachEvent()
     #test.collectGlobalResolutionFactor()
     #print(test.getdiffEventplaneflow(particleName = 'pion_p'))
     #print(test.getdiffEventplaneflow(particleName = 'kaon_p'))
     #print(test.getdiffEventplaneflow(particleName = 'proton'))
+    #print(test.getdiffsubEventplaneflow(particleName = 'pion_p'))
+    #print(test.getdiffsubEventplaneflow(particleName = 'kaon_p'))
+    #print(test.getdiffsubEventplaneflow(particleName = 'proton'))
     #print(test.getdiffScalarProductflow(particleName = 'pion_p'))
     #print(test.getdiffScalarProductflow(particleName = 'kaon_p'))
     #print(test.getdiffScalarProductflow(particleName = 'proton'))
