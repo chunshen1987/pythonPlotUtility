@@ -112,8 +112,9 @@ class minbiasEccReader(object):
         binnedData, binnedData_err = getBinnedAveragedDatawithErrorbars(fetchedData, nbin)
         disOutput = open('%s_distribution_C%d-%d_%s.dat' % (disType, int(centralityBound[0]), int(centralityBound[1]), cutType), 'w')
         for i in range(nbin):
-            disOutput.write("%18.8e  %18.8e  %18.8e\n" % (binnedData[i,0], binnedData[i,2], binnedData_err[i,2]))
+            disOutput.write("%18.8e  %18.8e  %18.8e  %18.8e   %18.8e\n" % (binnedData[i,0], binnedData[i,1], binnedData_err[i,1], binnedData[i,2], binnedData_err[i,2]))
         disOutput.close()
+        return(array([binnedData[:,0], binnedData[:,1], binnedData_err[:,1], binnedData[:,2], binnedData_err[:,2]]).transpose())
 
 if __name__ == "__main__":
     reader = minbiasEccReader(str(argv[1]))

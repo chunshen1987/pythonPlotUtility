@@ -49,10 +49,10 @@ def getBinnedAveragedDatawithErrorbars(dataMatrix, nbin, bincol=0):
       if nsamples == 0:    # if there is no data in the bin, middle value of the bin is used
          binnedData[idxbin, bincol] = binmid
       
-      binnedData[idxbin, ncol] = nsamples
+      binnedData[idxbin, ncol] = float(nsamples)/ntotal
       binnedData[idxbin, ncol+1] = (float(nsamples)/ntotal)/binWidth
       # calculate statistical errors according to Poisson distribution
-      binnedData_err[idxbin, ncol] = sqrt(float(nsamples)/ntotal)*ntotal
+      binnedData_err[idxbin, ncol] = sqrt(float(nsamples)/ntotal)/sqrt(ntotal)
       binnedData_err[idxbin, ncol+1] = sqrt(float(nsamples)/ntotal)/binWidth/sqrt(ntotal)
    return binnedData, binnedData_err
 
