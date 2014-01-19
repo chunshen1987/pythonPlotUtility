@@ -545,6 +545,9 @@ class particleReader(object):
         norder = 6
         Nev = self.totNev
         pidString = self.getPidString(particleName)
+        
+        etaGap = 1
+        etaBound1 = etaGap/2.; etaBound2 = - etaGap/2.
         if self.db.createTableIfNotExists("globalQnvector", (("hydroEvent_id","integer"), ("UrQMDEvent_id", "integer"), ("weightType", "text"), ("n", "integer"), ("Nparticle", "integer"), ("Qn", "real"), ("Qn_psi", "real"), ("Nparticle_A", "integer"), ("subQnA", "real"), ("subQnA_psi", "real"), ("Nparticle_B", "integer"), ("subQnB", "real"), ("subQnB_psi", "real") )):
             for hydroId in range(1, self.hydroNev+1):
                 UrQMDNev = self.db.executeSQLquery("select Number_of_UrQMDevents from UrQMD_NevList where hydroEventId = %d " % hydroId).fetchall()[0][0]
@@ -555,16 +558,18 @@ class particleReader(object):
                         if offset != 0: tempDB.closeConnection(discardChanges = True)
                         print("Cache temporary database, please wait ...")
                         tempDB = SqliteDB(':memory:')
-                        tempDB.createTableIfNotExists("particle_list", (("UrQMDEvent_id", "integer"), ("pT", "real"), ("phi_p", "real")))
-                        tempDB.insertIntoTable("particle_list", self.db.executeSQLquery("select UrQMDEvent_id, pT, phi_p from particle_list where hydroEvent_id = %d and (%d < UrQMDEvent_id and UrQMDEvent_id <= %d) and (%s)" % (hydroId, offset, offset+cachedNev, pidString)).fetchall())
+                        tempDB.createTableIfNotExists("particle_list", (("UrQMDEvent_id", "integer"), ("pT", "real"), ("phi_p", "real"), ("pseudorapidity", "real")))
+                        tempDB.insertIntoTable("particle_list", self.db.executeSQLquery("select UrQMDEvent_id, pT, phi_p, pseudorapidity from particle_list where hydroEvent_id = %d and (%d < UrQMDEvent_id and UrQMDEvent_id <= %d) and (%s)" % (hydroId, offset, offset+cachedNev, pidString)).fetchall())
                         offset += cachedNev
+
                     print("processing event: (%d, %d) " % (hydroId, UrQMDId))
-                    particleList = array(tempDB.executeSQLquery("select pT, phi_p from particle_list where UrQMDEvent_id = %d " % (UrQMDId)).fetchall())
+                    particleList = array(tempDB.executeSQLquery("select pT, phi_p, pseudorapidity from particle_list where UrQMDEvent_id = %d" % (UrQMDId)).fetchall())
 
                     pT = particleList[:,0]
                     phi = particleList[:,1]
+                    eta = particleList[:,2]
                     Nparticle = len(pT)
-                    Nparticle_A = int(Nparticle/2); Nparticle_B = Nparticle_A
+                    Nparticle_A = min(len(pT[eta > etaBound1]), len(pT[eta < etaBound2])); Nparticle_B = Nparticle_A
                     for weightType in weightTypes:
                         if weightType == '1':
                             weight = ones(len(pT))
@@ -572,19 +577,14 @@ class particleReader(object):
                             weight = pT
                         for order in range(1,norder+1):
                             #calculate subQn vector
-                            idx = range(Nparticle)
-                            shuffle(idx); idx_A = idx[0:Nparticle_A]
-                            shuffle(idx); idx_B = idx[0:Nparticle_B]
-                            subQnA_X = 0.0; subQnA_Y = 0.0
-                            for i in idx_A:
-                                subQnA_X += weight[i]*cos(order*phi[i])
-                                subQnA_Y += weight[i]*sin(order*phi[i])
+                            idx_A = eta > etaBound1
+                            subQnA_X = sum(weight[idx_A]*cos(order*phi[idx_A]))
+                            subQnA_Y = sum(weight[idx_A]*sin(order*phi[idx_A]))
                             subPsi_nA = arctan2(subQnA_Y, subQnA_X)/order
                             subQnA = sqrt(subQnA_X**2. + subQnA_Y**2.)/Nparticle_A
-                            subQnB_X = 0.0; subQnB_Y = 0.0
-                            for i in idx_B:
-                                subQnB_X += weight[i]*cos(order*phi[i])
-                                subQnB_Y += weight[i]*sin(order*phi[i])
+                            idx_B = eta < etaBound2
+                            subQnB_X = sum(weight[idx_B]*cos(order*phi[idx_B]))
+                            subQnB_Y = sum(weight[idx_B]*sin(order*phi[idx_B]))
                             subPsi_nB = arctan2(subQnB_Y, subQnB_X)/order
                             subQnB = sqrt(subQnB_X**2. + subQnB_Y**2.)/Nparticle_B
                         
@@ -800,28 +800,31 @@ class particleReader(object):
             event plane angle is determined by all charged particles in the whole event
         """
         print("Collecting differential event plane flow vn{EP} for %s ..." % particleName)
-        norder = 6; npT = 31
+        Nev = self.totNev
+        norder = 6; npT = 30
         weightTypes = ['1', 'pT']
         pidString = self.getPidString(particleName)
 
-        vnpT = linspace(pT_range[0], pT_range[1], npT)
-        pTmean = zeros([npT-1]); NevpT = zeros(npT-1)
-        vn_obs = zeros([norder, npT-1]); vn_obs_pTweight = zeros([norder, npT-1])
-        vn_obs_sq = zeros([norder, npT-1]); vn_obs_pTweight_sq = zeros([norder, npT-1])
+        pTBoundary = linspace(pT_range[0], pT_range[1], npT+1)
+        pTmean = zeros([npT])
+        vn_obs = zeros([norder, npT]); vn_obs_pTweight = zeros([norder, npT])
+        vn_obs_sq = zeros([norder, npT]); vn_obs_pTweight_sq = zeros([norder, npT])
+        
+        cachedNev = 1000; tempDBFlag = False
         for hydroId in range(1, self.hydroNev+1):
             UrQMDNev = self.db.executeSQLquery("select Number_of_UrQMDevents from UrQMD_NevList where hydroEventId = %d " % hydroId).fetchall()[0][0]
-            cachedNev = 1000; offset = 0
+            offset = 0
             for UrQMDId in range(1, UrQMDNev+1):
-                print("processing event: (%d, %d) " % (hydroId, UrQMDId))
                 # cache small temporary database to speed up processing
                 if UrQMDId % cachedNev == 1:
-                    if offset != 0: tempDB.closeConnection(discardChanges = True)
+                    if tempDBFlag: tempDB.closeConnection(discardChanges = True)
                     print("Cache temporary database, please wait ...")
-                    tempDB = SqliteDB(':memory:')
+                    tempDB = SqliteDB(':memory:'); tempDBFlag = True
                     tempDB.createTableIfNotExists("particle_list", (("UrQMDEvent_id", "integer"), ("pT", "real"), ("phi_p", "real")))
-                    tempDB.insertIntoTable("particle_list", self.db.executeSQLquery("select UrQMDEvent_id, pT, phi_p from particle_list where hydroEvent_id = %d and (%d < UrQMDEvent_id and UrQMDEvent_id <= %d) and (%s) and (%g <= pT and pT <= %g) and (%g <= %s and %s <= %g)" % (hydroId, offset, offset+cachedNev, pidString, pT_range[0], pT_range[1], rap_range[0], rapType, rapType, rap_range[1])).fetchall())
+                    tempDB.insertIntoTable("particle_list", self.db.executeSQLquery("select UrQMDEvent_id, pT, phi_p from particle_list where hydroEvent_id = %d and (%d < UrQMDEvent_id and UrQMDEvent_id <= %d) and (%s) and (%g <= pT and pT < %g) and (%g <= %s and %s <= %g)" % (hydroId, offset, offset+cachedNev, pidString, pT_range[0], pT_range[1], rap_range[0], rapType, rapType, rap_range[1])).fetchall())
                     offset += cachedNev
                 
+                print("processing event: (%d, %d) " % (hydroId, UrQMDId))
                 Qn_X = zeros([2, norder]); Qn_Y = zeros([2, norder])
                 for iorder in range(1, norder + 1):
                     QnVector = array(self.db.executeSQLquery("select Nparticle, Qn, Qn_psi from globalQnvector where hydroEvent_id = %d and UrQMDEvent_id = %d and weightType = '1' and n = %d" % (hydroId, UrQMDId, iorder)).fetchall())
@@ -831,17 +834,16 @@ class particleReader(object):
                     Qn_X[1, iorder-1] = QnVector[0,0]*QnVector[0,1]*cos(iorder*QnVector[0,2])
                     Qn_Y[1, iorder-1] = QnVector[0,0]*QnVector[0,1]*sin(iorder*QnVector[0,2])
                  
-                for ipT in range(npT-1):
-                    pTlow = vnpT[ipT]; pThigh = vnpT[ipT+1]
-                    particleList = array(tempDB.executeSQLquery("select pT, phi_p from particle_list where UrQMDEvent_id = %d and (%g <= pT and pT <= %g)" % (UrQMDId, pTlow, pThigh)).fetchall())
+                for ipT in range(npT):
+                    pTlow = pTBoundary[ipT]; pThigh = pTBoundary[ipT+1]
+                    particleList = array(tempDB.executeSQLquery("select pT, phi_p from particle_list where UrQMDEvent_id = %d and (%g <= pT and pT < %g)" % (UrQMDId, pTlow, pThigh)).fetchall())
                     
-                    if(particleList.size == 0):
+                    if(particleList.size == 0):  # no particle in the event
                         pTmean[ipT] = (pTlow + pThigh)/2.
                     else:
-                        NevpT[ipT] += 1
                         pT = particleList[:,0]
-                        pTmean[ipT] = mean(pT)
                         phi = particleList[:,1]
+                        pTmean[ipT] = mean(pT)
                         Nparticle = len(pT)
                         for weightType in weightTypes:
                             if weightType == '1':
@@ -861,23 +863,25 @@ class particleReader(object):
                                     Xn = Qn_X_local - weight[ipart]*cos(iorder*phi[ipart])
                                     Yn = Qn_Y_local - weight[ipart]*sin(iorder*phi[ipart])
                                     psi_n = arctan2(Yn, Xn)/iorder
-                                    vntemp += cos(iorder*(phi[ipart] - psi_n))
+                                    vntemp += weight[ipart]*cos(iorder*(phi[ipart] - psi_n))
+                                vntemp = vntemp/Nparticle
                                 if weightType == '1':
-                                    vn_obs[iorder-1][ipT] += vntemp/Nparticle
-                                    vn_obs_sq[iorder-1][ipT] += (vntemp/Nparticle)**2
+                                    vn_obs[iorder-1][ipT] += vntemp
+                                    vn_obs_sq[iorder-1][ipT] += vntemp**2
                                 elif weightType == 'pT':
-                                    vn_obs_pTweight[iorder-1][ipT] += vntemp/Nparticle
-                                    vn_obs_pTweight_sq[iorder-1][ipT] += (vntemp/Nparticle)**2
-        vn_obs = vn_obs/NevpT
-        vn_obs_err = sqrt(vn_obs_sq/NevpT - (vn_obs)**2.)/sqrt(NevpT)
-        vn_obs_pTweight = vn_obs_pTweight/NevpT
-        vn_obs_pTweight_err = sqrt(vn_obs_pTweight_sq/NevpT - (vn_obs_pTweight)**2.)/sqrt(NevpT)
-        vnEP = zeros([norder, npT-1]); vnEP_pTweight = zeros([norder, npT-1])
-        vnEP_err = zeros([norder, npT-1]); vnEP_pTweight_err = zeros([norder, npT-1])
+                                    vn_obs_pTweight[iorder-1][ipT] += vntemp
+                                    vn_obs_pTweight_sq[iorder-1][ipT] += vntemp**2
+        vn_obs = vn_obs/Nev
+        vn_obs_err = sqrt(vn_obs_sq/Nev - (vn_obs)**2.)/sqrt(Nev)
+        vn_obs_pTweight = vn_obs_pTweight/Nev
+        vn_obs_pTweight_err = sqrt(vn_obs_pTweight_sq/Nev - (vn_obs_pTweight)**2.)/sqrt(Nev)
+
+        vnEP = zeros([norder, npT]); vnEP_pTweight = zeros([norder, npT])
+        vnEP_err = zeros([norder, npT]); vnEP_pTweight_err = zeros([norder, npT])
         for iorder in range(1, norder + 1):
             resolutionFactor = self.db.executeSQLquery("select R from resolutionFactorR where weightType = '1' and n = %d" % (iorder)).fetchall()[0][0]
             resolutionFactor_pTweight = self.db.executeSQLquery("select R from resolutionFactorR where weightType = 'pT' and n = %d" % (iorder)).fetchall()[0][0]
-            for ipT in range(npT-1):
+            for ipT in range(npT):
                 vnEP[iorder-1, ipT] = vn_obs[iorder-1, ipT]/resolutionFactor
                 vnEP_err[iorder-1, ipT] = vn_obs_err[iorder-1, ipT]/resolutionFactor
                 vnEP_pTweight[iorder-1, ipT] = vn_obs_pTweight[iorder-1, ipT]/resolutionFactor_pTweight
@@ -930,29 +934,31 @@ class particleReader(object):
             event plane angle is determined by all charged particles in the whole event
         """
         print("Collecting differential scalar product flow vn{SP} for %s ..." % particleName)
-        norder = 6; npT = 31
+        Nev = self.totNev
+        norder = 6; npT = 30
         weightTypes = ['1', 'pT']
         pidString = self.getPidString(particleName)
 
-        vnpT = linspace(pT_range[0], pT_range[1], npT)
-        pTmean = zeros([npT-1]); NevpT = zeros(npT-1)
-        vn_obs = zeros([norder, npT-1]); vn_obs_pTweight = zeros([norder, npT-1])
-        vn_obs_sq = zeros([norder, npT-1]); vn_obs_pTweight_sq = zeros([norder, npT-1])
+        pTBoundary = linspace(pT_range[0], pT_range[1], npT+1)
+        pTmean = zeros(npT)
+        vn_obs = zeros([norder, npT]); vn_obs_pTweight = zeros([norder, npT])
+        vn_obs_sq = zeros([norder, npT]); vn_obs_pTweight_sq = zeros([norder, npT])
 
+        cachedNev = 1000; tempDBFlag = False
         for hydroId in range(1, self.hydroNev+1):
             UrQMDNev = self.db.executeSQLquery("select Number_of_UrQMDevents from UrQMD_NevList where hydroEventId = %d " % hydroId).fetchall()[0][0]
-            cachedNev = 1000; offset = 0
+            offset = 0
             for UrQMDId in range(1, UrQMDNev+1):
-                print("processing event: (%d, %d) " % (hydroId, UrQMDId))
                 # cache small temporary database to speed up processing
                 if UrQMDId % cachedNev == 1:
-                    if offset != 0: tempDB.closeConnection(discardChanges = True)
+                    if tempDBFlag: tempDB.closeConnection(discardChanges = True)
                     print("Cache temporary database, please wait ...")
-                    tempDB = SqliteDB(':memory:')
+                    tempDB = SqliteDB(':memory:'); tempDBFlag = True
                     tempDB.createTableIfNotExists("particle_list", (("UrQMDEvent_id", "integer"), ("pT", "real"), ("phi_p", "real")))
-                    tempDB.insertIntoTable("particle_list", self.db.executeSQLquery("select UrQMDEvent_id, pT, phi_p from particle_list where hydroEvent_id = %d and (%d < UrQMDEvent_id and UrQMDEvent_id <= %d) and (%s) and (%g <= pT and pT <= %g) and (%g <= %s and %s <= %g)" % (hydroId, offset, offset+cachedNev, pidString, pT_range[0], pT_range[1], rap_range[0], rapType, rapType, rap_range[1])).fetchall())
+                    tempDB.insertIntoTable("particle_list", self.db.executeSQLquery("select UrQMDEvent_id, pT, phi_p from particle_list where hydroEvent_id = %d and (%d < UrQMDEvent_id and UrQMDEvent_id <= %d) and (%s) and (%g <= pT and pT < %g) and (%g <= %s and %s <= %g)" % (hydroId, offset, offset+cachedNev, pidString, pT_range[0], pT_range[1], rap_range[0], rapType, rapType, rap_range[1])).fetchall())
                     offset += cachedNev
 
+                print("processing event: (%d, %d) " % (hydroId, UrQMDId))
                 QnA = zeros([2,norder]); Qn_psiA = zeros([2,norder])
                 for iorder in range(1, norder + 1):
                     subQnVectors = array(self.db.executeSQLquery("select subQnA, subQnA_psi from globalQnvector where hydroEvent_id = %d and UrQMDEvent_id = %d and weightType = '1' and n = %d" % (hydroId, UrQMDId, iorder)).fetchall())
@@ -962,17 +968,16 @@ class particleReader(object):
                     QnA[1,iorder-1] = subQnVectors[0,0]
                     Qn_psiA[1,iorder-1] = subQnVectors[0,1]
               
-                for ipT in range(npT-1):
-                    pTlow = vnpT[ipT]; pThigh = vnpT[ipT+1]
+                for ipT in range(npT):
+                    pTlow = pTBoundary[ipT]; pThigh = pTBoundary[ipT+1]
                     particleList = array(tempDB.executeSQLquery("select pT, phi_p from particle_list where UrQMDEvent_id = %d and (%g <= pT and pT <= %g)" % (UrQMDId, pTlow, pThigh)).fetchall())
                     
-                    if(particleList.size == 0):
+                    if(particleList.size == 0):  # no particle in the bin
                         pTmean[ipT] = (pTlow + pThigh)/2.
                     else:
-                        NevpT[ipT] += 1
                         pT = particleList[:,0]
-                        pTmean[ipT] = mean(pT)
                         phi = particleList[:,1]
+                        pTmean[ipT] = mean(pT)
                         Nparticle = len(pT)
 
                         for weightType in weightTypes:
@@ -1002,18 +1007,18 @@ class particleReader(object):
                                 elif weightType == 'pT':
                                     vn_obs_pTweight[iorder-1][ipT] += temp
                                     vn_obs_pTweight_sq[iorder-1][ipT] += temp*temp
-        vn_obs = vn_obs/NevpT
-        vn_obs_err = sqrt(vn_obs_sq/NevpT - (vn_obs)**2.)/sqrt(NevpT)
-        vn_obs_pTweight = vn_obs_pTweight/NevpT
-        vn_obs_pTweight_err = sqrt(vn_obs_pTweight_sq/NevpT - (vn_obs_pTweight)**2.)/sqrt(NevpT)
+        vn_obs = vn_obs/Nev
+        vn_obs_err = sqrt(vn_obs_sq/Nev - (vn_obs)**2.)/sqrt(Nev)
+        vn_obs_pTweight = vn_obs_pTweight/Nev
+        vn_obs_pTweight_err = sqrt(vn_obs_pTweight_sq/Nev - (vn_obs_pTweight)**2.)/sqrt(Nev)
 
-        vnSP = zeros([norder, npT-1]); vnSP_pTweight = zeros([norder, npT-1])
-        vnSP_err = zeros([norder, npT-1]); vnSP_pTweight_err = zeros([norder, npT-1])
+        vnSP = zeros([norder, npT]); vnSP_pTweight = zeros([norder, npT])
+        vnSP_err = zeros([norder, npT]); vnSP_pTweight_err = zeros([norder, npT])
 
         for iorder in range(1, norder + 1):
             resolutionFactor = self.db.executeSQLquery("select R_SP_sub from resolutionFactorR where weightType = '1' and n = %d" % (iorder)).fetchall()[0][0]
             resolutionFactor_pTweight = self.db.executeSQLquery("select R_SP_sub from resolutionFactorR where weightType = 'pT' and n = %d" % (iorder)).fetchall()[0][0]
-            for ipT in range(npT-1):
+            for ipT in range(npT):
                 vnSP[iorder-1, ipT] = vn_obs[iorder-1, ipT]/resolutionFactor
                 vnSP_err[iorder-1, ipT] = vn_obs_err[iorder-1, ipT]/resolutionFactor
                 vnSP_pTweight[iorder-1, ipT] = vn_obs_pTweight[iorder-1, ipT]/resolutionFactor_pTweight
@@ -1101,7 +1106,7 @@ class particleReader(object):
                     if(particleList.size == 0):
                         pTmean[ipT] = (pTlow + pThigh)/2.
                     elif(len(particleList[:,0]) == 1):
-                        pTmean[ipT] = mean(pT)
+                        pTmean[ipT] = particleList[0,0]
                     else:
                         NevpT[ipT] += 1
                         pT = particleList[:,0]
@@ -1258,7 +1263,7 @@ if __name__ == "__main__":
     #print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
     #print(test.getParticleYieldvsrap('charged', rap_range = linspace(-2,2,41)))
     #print(test.getParticleYield('charged'))
-    #test.collectGlobalQnvectorforeachEvent()
+    test.collectGlobalQnvectorforeachEvent()
     #test.collectGlobalResolutionFactor()
     #print(test.getdiffEventplaneflow(particleName = 'pion_p'))
     #print(test.getdiffEventplaneflow(particleName = 'kaon_p'))
@@ -1266,9 +1271,9 @@ if __name__ == "__main__":
     #print(test.getdiffScalarProductflow(particleName = 'pion_p'))
     #print(test.getdiffScalarProductflow(particleName = 'kaon_p'))
     #print(test.getdiffScalarProductflow(particleName = 'proton'))
-    print(test.getdiffTwoparticlecumulantflow(particleName = 'pion_p'))
-    print(test.getdiffTwoparticlecumulantflow(particleName = 'kaon_p'))
-    print(test.getdiffTwoparticlecumulantflow(particleName = 'proton_p'))
+    #print(test.getdiffTwoparticlecumulantflow(particleName = 'pion_p'))
+    #print(test.getdiffTwoparticlecumulantflow(particleName = 'kaon_p'))
+    #print(test.getdiffTwoparticlecumulantflow(particleName = 'proton'))
     #test.collectEventplaneflow('charged', 2)
     #test.collectTwoparticleCorrelation()
 
