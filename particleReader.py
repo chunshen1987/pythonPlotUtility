@@ -1112,15 +1112,15 @@ class particleReader(object):
             the two particles are taken from the same bin
         """
         print("Collecting differential two particle cumulant flow vn{2} for %s ..." % particleName)
-        norder = 6; npT = 31
+        norder = 6; npT = 30
         weightTypes = ['1', 'pT']
         pidString = self.getPidString(particleName)
 
-        vnpT = linspace(pT_range[0], pT_range[1], npT)
-        pTmean = zeros([npT-1]); NevpT = zeros(npT-1)
-        vn_obs = zeros([norder, npT-1])
-        vn_obs_sq = zeros([norder, npT-1])
-        vn_obs_err = zeros([norder, npT-1])
+        pTBoundary = linspace(pT_range[0], pT_range[1], npT+1)
+        pTmean = zeros([npT]); NevpT = zeros(npT)
+        vn_obs = zeros([norder, npT])
+        vn_obs_sq = zeros([norder, npT])
+        vn_obs_err = zeros([norder, npT])
 
         for hydroId in range(1, self.hydroNev+1):
             UrQMDNev = self.db.executeSQLquery("select Number_of_UrQMDevents from UrQMD_NevList where hydroEventId = %d " % hydroId).fetchall()[0][0]
@@ -1136,9 +1136,9 @@ class particleReader(object):
                     tempDB.insertIntoTable("particle_list", self.db.executeSQLquery("select UrQMDEvent_id, pT, phi_p from particle_list where hydroEvent_id = %d and (%d < UrQMDEvent_id and UrQMDEvent_id <= %d) and (%s) and (%g <= pT and pT <= %g) and (%g <= %s and %s <= %g)" % (hydroId, offset, offset+cachedNev, pidString, pT_range[0], pT_range[1], rap_range[0], rapType, rapType, rap_range[1])).fetchall())
                     offset += cachedNev
 
-                for ipT in range(npT-1):
-                    pTlow = vnpT[ipT]; pThigh = vnpT[ipT+1]
-                    particleList = array(tempDB.executeSQLquery("select pT, phi_p from particle_list where UrQMDEvent_id = %d and (%g <= pT and pT <= %g)" % (UrQMDId, pTlow, pThigh)).fetchall())
+                for ipT in range(npT):
+                    pTlow = pTBoundary[ipT]; pThigh = pTBoundary[ipT+1]
+                    particleList = array(tempDB.executeSQLquery("select pT, phi_p from particle_list where UrQMDEvent_id = %d and (%g <= pT and pT < %g)" % (UrQMDId, pTlow, pThigh)).fetchall())
                     
                     if(particleList.size == 0):
                         pTmean[ipT] = (pTlow + pThigh)/2.
@@ -1158,22 +1158,19 @@ class particleReader(object):
                                 for iassopart in range(ipart+1, Nparticle):
                                     temp += cos(iorder*(phi[ipart] - phi[iassopart]))
 
-                            vn_obs[iorder-1] += temp/Npairs
-                            vn_obs_sq[iorder-1] += temp*temp/Npairs
+                            vn_obs[iorder-1, ipT] += temp/Npairs
+                            vn_obs_sq[iorder-1, ipT] += temp*temp/Npairs
+        eps = 1e-15
+        vn_obs = vn_obs/(NevpT + eps)
+        vn_obs_err = sqrt(vn_obs_sq/(NevpT + eps) - (vn_obs)**2.)/sqrt(NevpT + eps)
         
-        for ipT in range(npT-1):
-            if NevpT[ipT] != 0:
-                vn_obs[:,ipT] = vn_obs[:,ipT]/NevpT[ipT]
-                vn_obs_err[:,ipT] = sqrt(vn_obs_sq[:,ipT]/NevpT[ipT] - (vn_obs[:,ipT])**2.)/sqrt(NevpT[ipT])
-        
-        vn_2 = zeros([norder, npT-1])
-        vn_2_err = zeros([norder, npT-1])
+        vn_2 = zeros([norder, npT])
+        vn_2_err = zeros([norder, npT])
         for iorder in range(norder):
-            for ipT in range(npT-1):
-                if abs(vn_obs[iorder, ipT]) > 1e-8:
-                    vn_2 = sqrt(vn_obs)
-                    vn_2_err = vn_obs_err/(2.*sqrt(vn_obs))
-
+            for ipT in range(npT):
+                if abs(vn_obs[iorder, ipT]) > eps:
+                    vn_2[iorder, ipT] = sqrt(vn_obs[iorder, ipT])
+                    vn_2_err[iorder, ipT] = vn_obs_err[iorder, ipT]/(2.*sqrt(vn_obs[iorder, ipT]))
         return(pTmean, vn_2, vn_2_err)
 
     def getdiffTwoparticlecumulantflow(self, particleName = 'pion_p', order = 2, weightType = '1', pT_range = linspace(0.05, 2.5, 20), rap_range = [-0.5, 0.5], rapType = "rapidity"):
@@ -1302,15 +1299,15 @@ if __name__ == "__main__":
     #print(test.getParticleYield('charged'))
     #test.collectGlobalQnvectorforeachEvent()
     #test.collectGlobalResolutionFactor()
-    print(test.getdiffEventplaneflow(particleName = 'pion_p'))
-    print(test.getdiffEventplaneflow(particleName = 'kaon_p'))
-    print(test.getdiffEventplaneflow(particleName = 'proton'))
+    #print(test.getdiffEventplaneflow(particleName = 'pion_p'))
+    #print(test.getdiffEventplaneflow(particleName = 'kaon_p'))
+    #print(test.getdiffEventplaneflow(particleName = 'proton'))
     #print(test.getdiffScalarProductflow(particleName = 'pion_p'))
     #print(test.getdiffScalarProductflow(particleName = 'kaon_p'))
     #print(test.getdiffScalarProductflow(particleName = 'proton'))
-    #print(test.getdiffTwoparticlecumulantflow(particleName = 'pion_p'))
-    #print(test.getdiffTwoparticlecumulantflow(particleName = 'kaon_p'))
-    #print(test.getdiffTwoparticlecumulantflow(particleName = 'proton'))
+    print(test.getdiffTwoparticlecumulantflow(particleName = 'pion_p'))
+    print(test.getdiffTwoparticlecumulantflow(particleName = 'kaon_p'))
+    print(test.getdiffTwoparticlecumulantflow(particleName = 'proton'))
     #test.collectEventplaneflow('charged', 2)
     #test.collectTwoparticleCorrelation()
 
