@@ -977,7 +977,7 @@ class particleReader(object):
         pidString = self.getPidString(particleName)
 
         pTBoundary = linspace(pT_range[0], pT_range[1], npT+1)
-        pTmean = zeros(npT)
+        pTmean = zeros(npT); NevpT = zeros(npT)
         vn_obs = zeros([norder, npT]); vn_obs_pTweight = zeros([norder, npT])
         vn_obs_sq = zeros([norder, npT]); vn_obs_pTweight_sq = zeros([norder, npT])
 
@@ -996,22 +996,23 @@ class particleReader(object):
                     offset += cachedNev
 
                 print("processing event: (%d, %d) " % (hydroId, UrQMDId))
-                QnA = zeros([2,norder]); Qn_psiA = zeros([2,norder])
+                QnA_X = zeros([2,norder]); QnA_Y = zeros([2,norder])
                 for iorder in range(1, norder + 1):
                     subQnVectors = array(self.db.executeSQLquery("select subQnA, subQnA_psi from globalQnvector where hydroEvent_id = %d and UrQMDEvent_id = %d and weightType = '1' and n = %d" % (hydroId, UrQMDId, iorder)).fetchall())
-                    QnA[0,iorder-1] = subQnVectors[0,0]
-                    Qn_psiA[0,iorder-1] = subQnVectors[0,1]
+                    QnA_X[0,iorder-1] = subQnVectors[0,0]*cos(iorder*subQnVectors[0,1])
+                    QnA_Y[0,iorder-1] = subQnVectors[0,0]*sin(iorder*subQnVectors[0,1])
                     subQnVectors = array(self.db.executeSQLquery("select subQnA, subQnA_psi from globalQnvector where hydroEvent_id = %d and UrQMDEvent_id = %d and weightType = 'pT' and n = %d" % (hydroId, UrQMDId, iorder)).fetchall())
-                    QnA[1,iorder-1] = subQnVectors[0,0]
-                    Qn_psiA[1,iorder-1] = subQnVectors[0,1]
+                    QnA_X[1,iorder-1] = subQnVectors[0,0]*cos(iorder*subQnVectors[0,1])
+                    QnA_Y[1,iorder-1] = subQnVectors[0,0]*sin(iorder*subQnVectors[0,1])
               
                 for ipT in range(npT):
                     pTlow = pTBoundary[ipT]; pThigh = pTBoundary[ipT+1]
-                    particleList = array(tempDB.executeSQLquery("select pT, phi_p from particle_list where UrQMDEvent_id = %d and (%g <= pT and pT <= %g)" % (UrQMDId, pTlow, pThigh)).fetchall())
+                    particleList = array(tempDB.executeSQLquery("select pT, phi_p from particle_list where UrQMDEvent_id = %d and (%g <= pT and pT < %g)" % (UrQMDId, pTlow, pThigh)).fetchall())
                     
                     if(particleList.size == 0):  # no particle in the bin
                         pTmean[ipT] = (pTlow + pThigh)/2.
                     else:
+                        NevpT[ipT] += 1
                         pT = particleList[:,0]
                         phi = particleList[:,1]
                         pTmean[ipT] = mean(pT)
@@ -1025,29 +1026,25 @@ class particleReader(object):
                                 weight = pT
                                 iweight = 1
                             for iorder in range(1, norder + 1):
-                                QnA_local = QnA[iweight, iorder-1]
-                                Qn_psiA_local = Qn_psiA[iweight, iorder-1]
+                                QnA_X_local = QnA_X[iweight, iorder-1]
+                                QnA_Y_local = QnA_Y[iweight, iorder-1]
 
                                 # Qn vector for the interested particles
-                                Qn_X = 0.0; Qn_Y = 0.0
-                                for ipart in range(Nparticle):
-                                    Qn_X += weight[ipart]*cos(iorder*phi[ipart])
-                                    Qn_Y += weight[ipart]*sin(iorder*phi[ipart])
-                                Qn = sqrt(Qn_X**2. + Qn_Y**2.)/Nparticle
-                                Qn_psi = arctan2(Qn_Y, Qn_X)/iorder
+                                Qn_X = sum(weight*cos(iorder*phi))
+                                Qn_Y = sum(weight*sin(iorder*phi))
 
-                                temp = Qn*QnA_local*cos(iorder*(Qn_psi - Qn_psiA_local))
-
+                                temp = Qn_X*QnA_X_local + Qn_Y*QnA_Y_local
                                 if weightType == '1':
                                     vn_obs[iorder-1][ipT] += temp
                                     vn_obs_sq[iorder-1][ipT] += temp*temp
                                 elif weightType == 'pT':
                                     vn_obs_pTweight[iorder-1][ipT] += temp
                                     vn_obs_pTweight_sq[iorder-1][ipT] += temp*temp
-        vn_obs = vn_obs/Nev
-        vn_obs_err = sqrt(vn_obs_sq/Nev - (vn_obs)**2.)/sqrt(Nev)
-        vn_obs_pTweight = vn_obs_pTweight/Nev
-        vn_obs_pTweight_err = sqrt(vn_obs_pTweight_sq/Nev - (vn_obs_pTweight)**2.)/sqrt(Nev)
+        eps = 1e-15
+        vn_obs = vn_obs/(NevpT + eps)
+        vn_obs_err = sqrt(vn_obs_sq/(NevpT + eps) - (vn_obs)**2.)/sqrt(NevpT + eps)
+        vn_obs_pTweight = vn_obs_pTweight/(NevpT + eps)
+        vn_obs_pTweight_err = sqrt(vn_obs_pTweight_sq/(NevpT + eps) - (vn_obs_pTweight)**2.)/sqrt(NevpT + eps)
 
         vnSP = zeros([norder, npT]); vnSP_pTweight = zeros([norder, npT])
         vnSP_err = zeros([norder, npT]); vnSP_pTweight_err = zeros([norder, npT])
@@ -1055,11 +1052,10 @@ class particleReader(object):
         for iorder in range(1, norder + 1):
             resolutionFactor = self.db.executeSQLquery("select R_SP_sub from resolutionFactorR where weightType = '1' and n = %d" % (iorder)).fetchall()[0][0]
             resolutionFactor_pTweight = self.db.executeSQLquery("select R_SP_sub from resolutionFactorR where weightType = 'pT' and n = %d" % (iorder)).fetchall()[0][0]
-            for ipT in range(npT):
-                vnSP[iorder-1, ipT] = vn_obs[iorder-1, ipT]/resolutionFactor
-                vnSP_err[iorder-1, ipT] = vn_obs_err[iorder-1, ipT]/resolutionFactor
-                vnSP_pTweight[iorder-1, ipT] = vn_obs_pTweight[iorder-1, ipT]/resolutionFactor_pTweight
-                vnSP_pTweight_err[iorder-1, ipT] = vn_obs_pTweight_err[iorder-1, ipT]/resolutionFactor_pTweight
+            vnSP[iorder-1, :] = vn_obs[iorder-1, :]/resolutionFactor
+            vnSP_err[iorder-1, :] = vn_obs_err[iorder-1, :]/resolutionFactor
+            vnSP_pTweight[iorder-1, :] = vn_obs_pTweight[iorder-1, :]/resolutionFactor_pTweight
+            vnSP_pTweight_err[iorder-1, :] = vn_obs_pTweight_err[iorder-1, :]/resolutionFactor_pTweight
         
         return(pTmean, vnSP, vnSP_err, vnSP_pTweight, vnSP_pTweight_err)
 
