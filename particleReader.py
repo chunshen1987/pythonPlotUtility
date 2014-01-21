@@ -976,6 +976,10 @@ class particleReader(object):
         weightTypes = ['1', 'pT']
         pidString = self.getPidString(particleName)
 
+        Nev_vninte = 0.0
+        vn_inte_obs = zeros([norder]); vn_inte_obs_pTweight = zeros([norder])
+        vn_inte_obs_sq = zeros([norder]); vn_inte_obs_pTweight_sq = zeros([norder])
+
         pTBoundary = linspace(pT_range[0], pT_range[1], npT+1)
         pTmean = zeros(npT); NevpT = zeros(npT)
         vn_obs = zeros([norder, npT]); vn_obs_pTweight = zeros([norder, npT])
@@ -1005,6 +1009,35 @@ class particleReader(object):
                     QnA_X[1,iorder-1] = subQnVectors[0,0]*cos(iorder*subQnVectors[0,1])
                     QnA_Y[1,iorder-1] = subQnVectors[0,0]*sin(iorder*subQnVectors[0,1])
               
+                # pT integrate vn{SP}
+                particleList = array(tempDB.executeSQLquery("select pT, phi_p from particle_list where UrQMDEvent_id = %d and (%g <= pT and pT < %g)" % (UrQMDId, pT_range[0], pT_range[1])).fetchall())
+                if(particleList.size != 0):
+                    Nev_vninte += 1
+                    pT = particleList[:,0]
+                    phi = particleList[:,1]
+                    Nparticle = len(pT)
+                    for weightType in weightTypes:
+                        if weightType == '1':
+                            weight = ones(Nparticle); iweight = 0
+                        elif weightType == 'pT':
+                            weight = pT; iweight = 1
+                        for iorder in range(1, norder + 1):
+                            QnA_X_local = QnA_X[iweight, iorder-1]
+                            QnA_Y_local = QnA_Y[iweight, iorder-1]
+
+                            # Qn vector for the interested particles
+                            Qn_X = sum(weight*cos(iorder*phi))/Nparticle
+                            Qn_Y = sum(weight*sin(iorder*phi))/Nparticle
+
+                            temp = Qn_X*QnA_X_local + Qn_Y*QnA_Y_local
+                            if weightType == '1':
+                                vn_inte_obs[iorder-1] += temp
+                                vn_inte_obs_sq[iorder-1] += temp*temp
+                            elif weightType == 'pT':
+                                vn_inte_obs_pTweight[iorder-1] += temp
+                                vn_inte_obs_pTweight_sq[iorder-1] += temp*temp
+
+                # pT differential vn{SP}
                 for ipT in range(npT):
                     pTlow = pTBoundary[ipT]; pThigh = pTBoundary[ipT+1]
                     particleList = array(tempDB.executeSQLquery("select pT, phi_p from particle_list where UrQMDEvent_id = %d and (%g <= pT and pT < %g)" % (UrQMDId, pTlow, pThigh)).fetchall())
@@ -1035,29 +1068,43 @@ class particleReader(object):
 
                                 temp = Qn_X*QnA_X_local + Qn_Y*QnA_Y_local
                                 if weightType == '1':
-                                    vn_obs[iorder-1][ipT] += temp
-                                    vn_obs_sq[iorder-1][ipT] += temp*temp
+                                    vn_obs[iorder-1, ipT] += temp
+                                    vn_obs_sq[iorder-1, ipT] += temp*temp
                                 elif weightType == 'pT':
-                                    vn_obs_pTweight[iorder-1][ipT] += temp
-                                    vn_obs_pTweight_sq[iorder-1][ipT] += temp*temp
+                                    vn_obs_pTweight[iorder-1, ipT] += temp
+                                    vn_obs_pTweight_sq[iorder-1, ipT] += temp*temp
         eps = 1e-15
+        vn_inte_obs = vn_inte_obs/(Nev_vninte + eps)
+        vn_inte_obs_err = sqrt(vn_inte_obs_sq/(Nev_vninte + eps) - (vn_inte_obs)**2.)/sqrt(Nev_vninte + eps)
+        vn_inte_obs_pTweight = vn_inte_obs_pTweight/(Nev_vninte + eps)
+        vn_inte_obs_pTweight_err = sqrt(vn_inte_obs_pTweight_sq/(Nev_vninte + eps) - (vn_inte_obs_pTweight)**2.)/sqrt(Nev_vninte + eps)
+        
         vn_obs = vn_obs/(NevpT + eps)
         vn_obs_err = sqrt(vn_obs_sq/(NevpT + eps) - (vn_obs)**2.)/sqrt(NevpT + eps)
         vn_obs_pTweight = vn_obs_pTweight/(NevpT + eps)
         vn_obs_pTweight_err = sqrt(vn_obs_pTweight_sq/(NevpT + eps) - (vn_obs_pTweight)**2.)/sqrt(NevpT + eps)
 
+        vninteSP = zeros([norder]); vninteSP_pTweight = zeros([norder])
+        vninteSP_err = zeros([norder]); vninteSP_pTweight_err = zeros([norder])
+        
         vnSP = zeros([norder, npT]); vnSP_pTweight = zeros([norder, npT])
         vnSP_err = zeros([norder, npT]); vnSP_pTweight_err = zeros([norder, npT])
 
         for iorder in range(1, norder + 1):
             resolutionFactor = self.db.executeSQLquery("select R_SP_sub from resolutionFactorR where weightType = '1' and n = %d" % (iorder)).fetchall()[0][0]
             resolutionFactor_pTweight = self.db.executeSQLquery("select R_SP_sub from resolutionFactorR where weightType = 'pT' and n = %d" % (iorder)).fetchall()[0][0]
+
+            vninteSP[iorder-1] = vn_inte_obs[iorder-1]/resolutionFactor
+            vninteSP_err[iorder-1] = vn_inte_obs_err[iorder-1]/resolutionFactor
+            vninteSP_pTweight[iorder-1] = vn_inte_obs_pTweight[iorder-1]/resolutionFactor_pTweight
+            vninteSP_pTweight_err[iorder-1] = vn_inte_obs_pTweight_err[iorder-1]/resolutionFactor_pTweight
+
             vnSP[iorder-1, :] = vn_obs[iorder-1, :]/resolutionFactor
             vnSP_err[iorder-1, :] = vn_obs_err[iorder-1, :]/resolutionFactor
             vnSP_pTweight[iorder-1, :] = vn_obs_pTweight[iorder-1, :]/resolutionFactor_pTweight
             vnSP_pTweight_err[iorder-1, :] = vn_obs_pTweight_err[iorder-1, :]/resolutionFactor_pTweight
         
-        return(pTmean, vnSP, vnSP_err, vnSP_pTweight, vnSP_pTweight_err)
+        return(vninteSP, vninteSP_err, vninteSP_pTweight, vninteSP_pTweight_err, pTmean, vnSP, vnSP_err, vnSP_pTweight, vnSP_pTweight_err)
 
     def getdiffScalarProductflow(self, particleName = 'pion_p', order = 2, weightType = '1', pT_range = linspace(0.05, 2.5, 20), rap_range = [-0.5, 0.5], rapType = "rapidity"):
         """
@@ -1068,26 +1115,36 @@ class particleReader(object):
         pid = self.pid_lookup[particleName]
         collectFlag = False
         if rapType == 'rapidity':
-            tableName = "diffvnSP"
+            tableName = "diffvnSP"; tableName_vninte = "intevnSP"
         elif rapType == 'pseudorapidity':
-            tableName = "diffvnSPeta"
+            tableName = "diffvnSPeta"; tableName_vninte = "intevnSPeta"
         if self.db.createTableIfNotExists(tableName, (("pid", "integer"), ("weightType", "text"), ("n", "integer"), ("pT", "real"), ("vn", "real"), ("vn_err", "real") )):
             collectFlag = True
         else:
             vnSPdata = array(self.db.executeSQLquery("select pT, vn, vn_err from %s where pid = %d and weightType = '%s' and n = %d" % (tableName, pid, weightType, order)).fetchall())
             if vnSPdata.size == 0:
                 collectFlag = True
+        if self.db.createTableIfNotExists(tableName_vninte, (("pid", "integer"), ("weightType", "text"), ("n", "integer"), ("vn", "real"), ("vn_err", "real") )):
+            collectFlag = True
+        else:
+            vninteSPdata = array(self.db.executeSQLquery("select vn, vn_err from %s where pid = %d and weightType = '%s' and n = %d" % (tableName_vninte, pid, weightType, order)).fetchall())
+            if vninteSPdata.size == 0:
+                collectFlag = True
         if collectFlag:
-            pT, vnSP, vnSP_err, vnSP_pTweight, vnSP_pTweight_err = self.collectdiffScalarProductflow(particleName = particleName, rapType = rapType) 
+            vninteSP, vninteSP_err, vninteSP_pTweight, vninteSP_pTweight_err, pT, vnSP, vnSP_err, vnSP_pTweight, vnSP_pTweight_err = self.collectdiffScalarProductflow(particleName = particleName, rapType = rapType) 
             for iorder in range(len(vnSP[:,0])):
+                self.db.insertIntoTable(tableName_vninte, (pid, '1', iorder+1, vninteSP[iorder], vninteSP_err[iorder]))
+                self.db.insertIntoTable(tableName_vninte, (pid, 'pT', iorder+1, vninteSP_pTweight[iorder], vninteSP_pTweight_err[iorder]))
                 for ipT in range(len(pT)):
                     self.db.insertIntoTable(tableName, (pid, '1', iorder+1, pT[ipT], vnSP[iorder, ipT], vnSP_err[iorder, ipT]))
                     self.db.insertIntoTable(tableName, (pid, 'pT', iorder+1, pT[ipT], vnSP_pTweight[iorder, ipT], vnSP_pTweight_err[iorder, ipT]))
             self.db._dbCon.commit()
             if weightType == '1':
+                vninteSPdata = array([vninteSP[order-1], vninteSP_err[order-1]]).transpose()
                 vnSPdata = array([pT, vnSP[order-1,:], vnSP_err[order-1,:]]).transpose()
             elif weightType == 'pT':
-                vnSPdata = array([pT, vnSP_pTweight[order-1], vnSP_pTweight_err[order-1,:]]).transpose()
+                vninteSPdata = array([vninteSP_pTweight[order-1], vninteSP_pTweight_err[order-1]]).transpose()
+                vnSPdata = array([pT, vnSP_pTweight[order-1,:], vnSP_pTweight_err[order-1,:]]).transpose()
             if vnSPdata.size == 0:
                 print("There is no record for different event plane flow vn for %s" % particleName)
                 return None
@@ -1096,7 +1153,7 @@ class particleReader(object):
         vnpTinterp = interp(pT_range, vnSPdata[:,0], vnSPdata[:,1])
         vnpTinterp_err = interp(pT_range, vnSPdata[:,0], vnSPdata[:,2])
         results = array([pT_range, vnpTinterp, vnpTinterp_err])
-        return(transpose(results))
+        return(vninteSPdata, transpose(results))
     
     
     ################################################################################
