@@ -965,7 +965,7 @@ class particleReader(object):
         results = array([pT_range, vnEPpTinterp, vnEPpTinterp_err, vnsubEPpTinterp, vnsubEPpTinterp_err])
         return(transpose(results))
                 
-    def collectdiffScalarProductflow(self, particleName = 'pion_p', pT_range = [0.0, 3.0], rap_range = [-0.5, 0.5], rapType = "rapidity"):
+    def collectScalarProductflow(self, particleName = 'pion_p', pT_range = [0.0, 3.0], rap_range = [-0.5, 0.5], rapType = "rapidity"):
         """
             collect nth order pT differential scalar product harmonic flow, vn{SP}(pT)
             event plane angle is determined by all charged particles in the whole event
@@ -1106,7 +1106,7 @@ class particleReader(object):
         
         return(vninteSP, vninteSP_err, vninteSP_pTweight, vninteSP_pTweight_err, pTmean, vnSP, vnSP_err, vnSP_pTweight, vnSP_pTweight_err)
 
-    def getdiffScalarProductflow(self, particleName = 'pion_p', order = 2, weightType = '1', pT_range = linspace(0.05, 2.5, 20), rap_range = [-0.5, 0.5], rapType = "rapidity"):
+    def getScalarProductflow(self, particleName = 'pion_p', order = 2, weightType = '1', pT_range = linspace(0.05, 2.5, 20), rap_range = [-0.5, 0.5], rapType = "rapidity"):
         """
             retrieve nth order scalar product flow data from database for the given species 
             of particles with given pT_range.
@@ -1131,7 +1131,7 @@ class particleReader(object):
             if vninteSPdata.size == 0:
                 collectFlag = True
         if collectFlag:
-            vninteSP, vninteSP_err, vninteSP_pTweight, vninteSP_pTweight_err, pT, vnSP, vnSP_err, vnSP_pTweight, vnSP_pTweight_err = self.collectdiffScalarProductflow(particleName = particleName, rapType = rapType) 
+            vninteSP, vninteSP_err, vninteSP_pTweight, vninteSP_pTweight_err, pT, vnSP, vnSP_err, vnSP_pTweight, vnSP_pTweight_err = self.collectScalarProductflow(particleName = particleName, rapType = rapType) 
             for iorder in range(len(vnSP[:,0])):
                 self.db.insertIntoTable(tableName_vninte, (pid, '1', iorder+1, vninteSP[iorder], vninteSP_err[iorder]))
                 self.db.insertIntoTable(tableName_vninte, (pid, 'pT', iorder+1, vninteSP_pTweight[iorder], vninteSP_pTweight_err[iorder]))
@@ -1379,9 +1379,9 @@ if __name__ == "__main__":
     #print(test.getdiffEventplaneflow(particleName = 'pion_p'))
     #print(test.getdiffEventplaneflow(particleName = 'kaon_p'))
     #print(test.getdiffEventplaneflow(particleName = 'proton'))
-    print(test.getdiffScalarProductflow(particleName = 'pion_p'))
-    print(test.getdiffScalarProductflow(particleName = 'kaon_p'))
-    print(test.getdiffScalarProductflow(particleName = 'proton'))
+    print(test.getScalarProductflow(particleName = 'pion_p'))
+    print(test.getScalarProductflow(particleName = 'kaon_p'))
+    print(test.getScalarProductflow(particleName = 'proton'))
     #print(test.getdiffTwoparticlecumulantflow(particleName = 'pion_p'))
     #print(test.getdiffTwoparticlecumulantflow(particleName = 'kaon_p'))
     #print(test.getdiffTwoparticlecumulantflow(particleName = 'proton'))
