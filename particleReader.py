@@ -1336,7 +1336,7 @@ class particleReader(object):
                     vn_2_err[iorder, ipT] = vn_obs_err[iorder, ipT]/(2.*sqrt(vn_obs[iorder, ipT]))
         return(vn_2_inte, vn_2_inte_err, pTmean, vn_2, vn_2_err)
 
-    def getdiffTwoparticlecumulantflow(self, particleName = 'pion_p', order = 2, weightType = '1', pT_range = linspace(0.05, 2.5, 20), rap_range = [-0.5, 0.5], rapType = "rapidity"):
+    def getTwoparticlecumulantflow(self, particleName = 'pion_p', order = 2, weightType = '1', pT_range = linspace(0.05, 2.5, 20), rap_range = [-0.5, 0.5], rapType = "rapidity"):
         """
             retrieve nth order two particle cumulant flow data from database for the 
             given species of particles with given pT_range.
@@ -1345,21 +1345,30 @@ class particleReader(object):
         pid = self.pid_lookup[particleName]
         collectFlag = False
         if rapType == 'rapidity':
-            tableName = "diffvn2"
+            tableName = "diffvn2"; tableName_vninte = "intevn2"
         elif rapType == 'pseudorapidity':
-            tableName = "diffvn2eta"
+            tableName = "diffvn2eta"; tableName_vninte = "intevn2eta"
         if self.db.createTableIfNotExists(tableName, (("pid", "integer"), ("n", "integer"), ("pT", "real"), ("vn", "real"), ("vn_err", "real") )):
             collectFlag = True
         else:
             vn2data = array(self.db.executeSQLquery("select pT, vn, vn_err from %s where pid = %d and n = %d" % (tableName, pid, order)).fetchall())
             if vn2data.size == 0:
                 collectFlag = True
+        if self.db.createTableIfNotExists(tableName_vninte, (("pid", "integer"), ("n", "integer"), ("vn", "real"), ("vn_err", "real") )):
+            collectFlag = True
+        else:
+            vninte2data = array(self.db.executeSQLquery("select vn, vn_err from %s where pid = %d and n = %d" % (tableName_vninte, pid, order)).fetchall())
+            if vninte2data.size == 0:
+                collectFlag = True
+
         if collectFlag:
             vn2_inte, vn2_inte_err, pT, vn2, vn2_err = self.collectTwoparticleCumulantflow(particleName = particleName, rapType = rapType) 
             for iorder in range(len(vn2[:,0])):
+                self.db.insertIntoTable(tableName_vninte, (pid, iorder+1, vn2_inte[iorder], vn2_inte_err[iorder]))
                 for ipT in range(len(pT)):
                     self.db.insertIntoTable(tableName, (pid, iorder+1, pT[ipT], vn2[iorder, ipT], vn2_err[iorder, ipT]))
             self.db._dbCon.commit()
+            vninte2data = array([vn2_inte[order-1], vn2_inte_err[order-1]]).transpose()
             vn2data = array([pT, vn2[order-1,:], vn2_err[order-1,:]]).transpose()
             if vn2data.size == 0:
                 print("There is no record for different event plane flow vn for %s" % particleName)
@@ -1369,7 +1378,7 @@ class particleReader(object):
         vnpTinterp = interp(pT_range, vn2data[:,0], vn2data[:,1])
         vnpTinterp_err = interp(pT_range, vn2data[:,0], vn2data[:,2])
         results = array([pT_range, vnpTinterp, vnpTinterp_err])
-        return(transpose(results))
+        return(vninte2data, transpose(results))
 
     def collectTwoparticleCorrelation(self, particleName = 'pion_p', pT_range = [1.0, 2.0]):
         """
@@ -1465,12 +1474,12 @@ if __name__ == "__main__":
     print(test.getEventplaneflow(particleName = 'pion_p'))
     print(test.getEventplaneflow(particleName = 'kaon_p'))
     print(test.getEventplaneflow(particleName = 'proton'))
-    #print(test.getScalarProductflow(particleName = 'pion_p'))
-    #print(test.getScalarProductflow(particleName = 'kaon_p'))
-    #print(test.getScalarProductflow(particleName = 'proton'))
-    #print(test.getdiffTwoparticlecumulantflow(particleName = 'pion_p'))
-    #print(test.getdiffTwoparticlecumulantflow(particleName = 'kaon_p'))
-    #print(test.getdiffTwoparticlecumulantflow(particleName = 'proton'))
+    print(test.getScalarProductflow(particleName = 'pion_p'))
+    print(test.getScalarProductflow(particleName = 'kaon_p'))
+    print(test.getScalarProductflow(particleName = 'proton'))
+    print(test.getTwoparticlecumulantflow(particleName = 'pion_p'))
+    print(test.getTwoparticlecumulantflow(particleName = 'kaon_p'))
+    print(test.getTwoparticlecumulantflow(particleName = 'proton'))
     #test.collectEventplaneflow('charged', 2)
     #test.collectTwoparticleCorrelation()
 
