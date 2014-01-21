@@ -1030,10 +1030,10 @@ class particleReader(object):
                                 QnA_Y_local = QnA_Y[iweight, iorder-1]
 
                                 # Qn vector for the interested particles
-                                Qn_X = sum(weight*cos(iorder*phi))
-                                Qn_Y = sum(weight*sin(iorder*phi))
+                                Qn_X = sum(weight*cos(iorder*phi))/Nparticle
+                                Qn_Y = sum(weight*sin(iorder*phi))/Nparticle
 
-                                temp = Qn_X*QnA_X_local - Qn_Y*QnA_Y_local
+                                temp = Qn_X*QnA_X_local + Qn_Y*QnA_Y_local
                                 if weightType == '1':
                                     vn_obs[iorder-1][ipT] += temp
                                     vn_obs_sq[iorder-1][ipT] += temp*temp
@@ -1113,9 +1113,12 @@ class particleReader(object):
         pidString = self.getPidString(particleName)
 
         pTBoundary = linspace(pT_range[0], pT_range[1], npT+1)
+        Nev_vn = 0.0
+        vn_inte_obs = zeros([norder]); vn_inte_obs_sq = zeros([norder])
+        vn_inte_obs_err = zeros([norder])
+
         pTmean = zeros([npT]); NevpT = zeros(npT)
-        vn_obs = zeros([norder, npT])
-        vn_obs_sq = zeros([norder, npT])
+        vn_obs = zeros([norder, npT]); vn_obs_sq = zeros([norder, npT])
         vn_obs_err = zeros([norder, npT])
 
         for hydroId in range(1, self.hydroNev+1):
@@ -1132,6 +1135,21 @@ class particleReader(object):
                     tempDB.insertIntoTable("particle_list", self.db.executeSQLquery("select UrQMDEvent_id, pT, phi_p from particle_list where hydroEvent_id = %d and (%d < UrQMDEvent_id and UrQMDEvent_id <= %d) and (%s) and (%g <= pT and pT <= %g) and (%g <= %s and %s <= %g)" % (hydroId, offset, offset+cachedNev, pidString, pT_range[0], pT_range[1], rap_range[0], rapType, rapType, rap_range[1])).fetchall())
                     offset += cachedNev
 
+                #calculate pT integrated v_n{2}
+                particleList_phi = array(tempDB.executeSQLquery("select phi_p from particle_list where UrQMDEvent_id = %d and (%g <= pT and pT < %g)" % (UrQMDId, pT_range[0], pT_range[1])).fetchall())
+                if(len(particleList_phi) > 1):
+                    Nev_vn += 1
+                    Nparticle = len(particleList_phi)
+                    Npairs = Nparticle*(Nparticle - 1)/2.
+                    for iorder in range(1, norder + 1):
+                        temp = 0.0
+                        for ipart in range(Nparticle-1):
+                            for iassopart in range(ipart+1, Nparticle):
+                                temp += cos(iorder*(particleList_phi[ipart] - particleList_phi[iassopart]))
+                        vn_inte_obs[iorder-1] += temp/Npairs
+                        vn_inte_obs_sq[iorder-1] += temp*temp/Npairs
+
+                #calculate pT differential v_n{2}(pT)
                 for ipT in range(npT):
                     pTlow = pTBoundary[ipT]; pThigh = pTBoundary[ipT+1]
                     particleList = array(tempDB.executeSQLquery("select pT, phi_p from particle_list where UrQMDEvent_id = %d and (%g <= pT and pT < %g)" % (UrQMDId, pTlow, pThigh)).fetchall())
@@ -1157,17 +1175,23 @@ class particleReader(object):
                             vn_obs[iorder-1, ipT] += temp/Npairs
                             vn_obs_sq[iorder-1, ipT] += temp*temp/Npairs
         eps = 1e-15
+        vn_inte_obs = vn_inte_obs/(Nev_vn + eps)
+        vn_inte_obs_err = sqrt(vn_inte_obs_sq/(Nev_vn + eps) - (vn_inte_obs)**2.)/sqrt(Nev_vn + eps)
+
         vn_obs = vn_obs/(NevpT + eps)
         vn_obs_err = sqrt(vn_obs_sq/(NevpT + eps) - (vn_obs)**2.)/sqrt(NevpT + eps)
         
-        vn_2 = zeros([norder, npT])
-        vn_2_err = zeros([norder, npT])
+        vn_2_inte = zeros([norder]); vn_2_inte_err = zeros([norder])
+        vn_2 = zeros([norder, npT]); vn_2_err = zeros([norder, npT])
         for iorder in range(norder):
+            if vn_inte_obs[iorder] > 0.0:
+                vn_2_inte[iorder] = sqrt(vn_inte_obs[iorder])
+                vn_2_inte_err[iorder] = vn_inte_obs_err[iorder]/(2.*sqrt(vn_inte_obs[iorder]))
             for ipT in range(npT):
-                if abs(vn_obs[iorder, ipT]) > eps:
+                if vn_obs[iorder, ipT] > 0.0:
                     vn_2[iorder, ipT] = sqrt(vn_obs[iorder, ipT])
                     vn_2_err[iorder, ipT] = vn_obs_err[iorder, ipT]/(2.*sqrt(vn_obs[iorder, ipT]))
-        return(pTmean, vn_2, vn_2_err)
+        return(vn_2_inte, vn_2_inte_err, pTmean, vn_2, vn_2_err)
 
     def getdiffTwoparticlecumulantflow(self, particleName = 'pion_p', order = 2, weightType = '1', pT_range = linspace(0.05, 2.5, 20), rap_range = [-0.5, 0.5], rapType = "rapidity"):
         """
@@ -1188,7 +1212,7 @@ class particleReader(object):
             if vn2data.size == 0:
                 collectFlag = True
         if collectFlag:
-            pT, vn2, vn2_err = self.collectTwoparticleCumulantflow(particleName = particleName, rapType = rapType) 
+            vn2_inte, vn2_inte_err, pT, vn2, vn2_err = self.collectTwoparticleCumulantflow(particleName = particleName, rapType = rapType) 
             for iorder in range(len(vn2[:,0])):
                 for ipT in range(len(pT)):
                     self.db.insertIntoTable(tableName, (pid, iorder+1, pT[ipT], vn2[iorder, ipT], vn2_err[iorder, ipT]))
