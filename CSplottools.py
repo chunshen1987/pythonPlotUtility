@@ -14,7 +14,7 @@ def getPlotElements(idx):
                  '>', '1', '2', '3', '4', 'h', '+', 'x', 'd', '|', '_']
    return lineStyleList[idx%len(lineStyleList)], MarkerList[idx%len(MarkerList)], colorList[idx%len(colorList)], shadowColorList[idx%len(shadowColorList)]
 
-def getBinnedAveragedDatawithErrorbars(dataMatrix, nbin, bincol=0):
+def getBinnedAveragedDatawithErrorbars(dataMatrix, nbin, setBinBoundary = False, binBoudary = [0.0, 1.0], bincol=0):
    """
       Return the binned average of data, together with the count of the number 
       of data and normalized probability distribution. It returns another matrix
@@ -28,7 +28,10 @@ def getBinnedAveragedDatawithErrorbars(dataMatrix, nbin, bincol=0):
    binColumn = dataMatrix[:, bincol]
    ntotal = len(binColumn)
    
-   binMin = min(binColumn); binMax = max(binColumn)+1e-8
+   if setBinBoundary:
+       binMin = binBoudary[0]; binMax = binBoudary[1]
+   else:
+       binMin = min(binColumn); binMax = max(binColumn)+1e-8
    binEdges = linspace(binMin, binMax, nbin+1)
    
    binnedData = zeros([nbin, ncol+2])

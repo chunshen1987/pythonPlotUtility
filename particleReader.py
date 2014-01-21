@@ -1033,7 +1033,7 @@ class particleReader(object):
                                 Qn_X = sum(weight*cos(iorder*phi))
                                 Qn_Y = sum(weight*sin(iorder*phi))
 
-                                temp = Qn_X*QnA_X_local + Qn_Y*QnA_Y_local
+                                temp = Qn_X*QnA_X_local - Qn_Y*QnA_Y_local
                                 if weightType == '1':
                                     vn_obs[iorder-1][ipT] += temp
                                     vn_obs_sq[iorder-1][ipT] += temp*temp
@@ -1298,12 +1298,12 @@ if __name__ == "__main__":
     #print(test.getdiffEventplaneflow(particleName = 'pion_p'))
     #print(test.getdiffEventplaneflow(particleName = 'kaon_p'))
     #print(test.getdiffEventplaneflow(particleName = 'proton'))
-    #print(test.getdiffScalarProductflow(particleName = 'pion_p'))
-    #print(test.getdiffScalarProductflow(particleName = 'kaon_p'))
-    #print(test.getdiffScalarProductflow(particleName = 'proton'))
-    print(test.getdiffTwoparticlecumulantflow(particleName = 'pion_p'))
-    print(test.getdiffTwoparticlecumulantflow(particleName = 'kaon_p'))
-    print(test.getdiffTwoparticlecumulantflow(particleName = 'proton'))
+    print(test.getdiffScalarProductflow(particleName = 'pion_p'))
+    print(test.getdiffScalarProductflow(particleName = 'kaon_p'))
+    print(test.getdiffScalarProductflow(particleName = 'proton'))
+    #print(test.getdiffTwoparticlecumulantflow(particleName = 'pion_p'))
+    #print(test.getdiffTwoparticlecumulantflow(particleName = 'kaon_p'))
+    #print(test.getdiffTwoparticlecumulantflow(particleName = 'proton'))
     #test.collectEventplaneflow('charged', 2)
     #test.collectTwoparticleCorrelation()
 
