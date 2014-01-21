@@ -1051,6 +1051,20 @@ class particleReader(object):
         results = array([pT_range, vnEPpTinterp, vnEPpTinterp_err, vnsubEPpTinterp, vnsubEPpTinterp_err])
         return(array([vninteEPdata, vnintesubEPdata]).transpose(), transpose(results))
                 
+    def getdiffEventplaneflow(self, particleName = 'pion_p', order = 2, weightType = '1', pT_range = linspace(0.05, 2.5, 20), rap_range = [-0.5, 0.5], rapType = "rapidity"):
+        """
+            return vn{EP} and vn{subEP}
+        """
+        vninteEP, vndiffEP = self.getEventplaneflow(particleName = particleName, order = order, weightType = weightType, pT_range = pT_range, rap_range = rap_range, rapType = rapType)
+        return(vndiffEP)
+    
+    def getinteEventplaneflow(self, particleName = 'pion_p', order = 2, weightType = '1', pT_range = linspace(0.05, 2.5, 20), rap_range = [-0.5, 0.5], rapType = "rapidity"):
+        """
+            return vn{EP} and vn{subEP}
+        """
+        vninteEP, vndiffEP = self.getEventplaneflow(particleName = particleName, order = order, weightType = weightType, pT_range = pT_range, rap_range = rap_range, rapType = rapType)
+        return(vninteEP)
+
     def collectScalarProductflow(self, particleName = 'pion_p', pT_range = [0.0, 3.0], rap_range = [-0.5, 0.5], rapType = "rapidity"):
         """
             collect nth order pT differential scalar product harmonic flow, vn{SP}(pT)
@@ -1241,6 +1255,19 @@ class particleReader(object):
         results = array([pT_range, vnpTinterp, vnpTinterp_err])
         return(vninteSPdata, transpose(results))
     
+    def getdiffScalarProductflow(self, particleName = 'pion_p', order = 2, weightType = '1', pT_range = linspace(0.05, 2.5, 20), rap_range = [-0.5, 0.5], rapType = "rapidity"):
+        """
+            return vn{SP}(pT)
+        """
+        vninteSP, vndiffSP = self.getScalarProductflow(particleName = particleName, order = order, weightType = weightType, pT_range = pT_range, rap_range = rap_range, rapType = rapType)
+        return(vndiffSP)
+    
+    def getinteScalarProductflow(self, particleName = 'pion_p', order = 2, weightType = '1', pT_range = linspace(0.05, 2.5, 20), rap_range = [-0.5, 0.5], rapType = "rapidity"):
+        """
+            return vn{SP}
+        """
+        vninteSP, vndiffSP = self.getScalarProductflow(particleName = particleName, order = order, weightType = weightType, pT_range = pT_range, rap_range = rap_range, rapType = rapType)
+        return(vninteSP)
     
     ################################################################################
     # functions to collect two particle correlation
@@ -1379,6 +1406,20 @@ class particleReader(object):
         vnpTinterp_err = interp(pT_range, vn2data[:,0], vn2data[:,2])
         results = array([pT_range, vnpTinterp, vnpTinterp_err])
         return(vninte2data, transpose(results))
+    
+    def getdiffTwoparticlecumulantflow(self, particleName = 'pion_p', order = 2, weightType = '1', pT_range = linspace(0.05, 2.5, 20), rap_range = [-0.5, 0.5], rapType = "rapidity"):
+        """
+            return vn{2}(pT)
+        """
+        vn2inte, vn2diff = self.getTwoparticlecumulantflow(particleName = particleName, order = order, weightType = weightType, pT_range = pT_range, rap_range = rap_range, rapType = rapType)
+        return(vn2diff)
+    
+    def getinteTwoparticlecumulantflow(self, particleName = 'pion_p', order = 2, weightType = '1', pT_range = linspace(0.05, 2.5, 20), rap_range = [-0.5, 0.5], rapType = "rapidity"):
+        """
+            return vn{2}
+        """
+        vn2inte, vn2diff = self.getTwoparticlecumulantflow(particleName = particleName, order = order, weightType = weightType, pT_range = pT_range, rap_range = rap_range, rapType = rapType)
+        return(vn2inte)
 
     def collectTwoparticleCorrelation(self, particleName = 'pion_p', pT_range = [1.0, 2.0]):
         """
@@ -1471,15 +1512,15 @@ if __name__ == "__main__":
     #print(test.getParticleYield('charged'))
     #test.collectGlobalQnvectorforeachEvent()
     #test.collectGlobalResolutionFactor()
-    print(test.getEventplaneflow(particleName = 'pion_p'))
-    print(test.getEventplaneflow(particleName = 'kaon_p'))
-    print(test.getEventplaneflow(particleName = 'proton'))
-    print(test.getScalarProductflow(particleName = 'pion_p'))
-    print(test.getScalarProductflow(particleName = 'kaon_p'))
-    print(test.getScalarProductflow(particleName = 'proton'))
-    print(test.getTwoparticlecumulantflow(particleName = 'pion_p'))
-    print(test.getTwoparticlecumulantflow(particleName = 'kaon_p'))
-    print(test.getTwoparticlecumulantflow(particleName = 'proton'))
+    print(test.getdiffEventplaneflow(particleName = 'pion_p'))
+    print(test.getdiffEventplaneflow(particleName = 'kaon_p'))
+    print(test.getdiffEventplaneflow(particleName = 'proton'))
+    print(test.getdiffScalarProductflow(particleName = 'pion_p'))
+    print(test.getdiffScalarProductflow(particleName = 'kaon_p'))
+    print(test.getdiffScalarProductflow(particleName = 'proton'))
+    print(test.getdiffTwoparticlecumulantflow(particleName = 'pion_p'))
+    print(test.getdiffTwoparticlecumulantflow(particleName = 'kaon_p'))
+    print(test.getdiffTwoparticlecumulantflow(particleName = 'proton'))
     #test.collectEventplaneflow('charged', 2)
     #test.collectTwoparticleCorrelation()
 
