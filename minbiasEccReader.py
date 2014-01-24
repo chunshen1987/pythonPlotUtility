@@ -60,14 +60,20 @@ class minbiasEccReader(object):
             upperbound = self.centralityBoundaries[icen][1]
             nsample = int(nevent*(upperbound - lowerbound)/100)-1
             noffset = int(nevent*lowerbound/100)
-            fetchedData = array(self.db.executeSQLquery("select Npart, b, total_entropy from collisionParameters order by -%s limit %d offset %d" % (cutType, nsample, noffset)).fetchall())
+            if cutType == 'b':
+                fetchedData = array(self.db.executeSQLquery("select Npart, b, total_entropy from collisionParameters order by %s limit %d offset %d" % (cutType, nsample, noffset)).fetchall())
+            else:
+                fetchedData = array(self.db.executeSQLquery("select Npart, b, total_entropy from collisionParameters order by -%s limit %d offset %d" % (cutType, nsample, noffset)).fetchall())
             cenCentral = (upperbound + lowerbound)/2.
             Npartmean = mean(fetchedData[:,0])
             Npartmin = min(fetchedData[:,0]); Npartmax = max(fetchedData[:,0])
             bmin = min(fetchedData[:,1]); bmax = max(fetchedData[:,1])
             dSdymin = min(fetchedData[:,2])/multiplicityFactor; dSdymax = max(fetchedData[:,2])/multiplicityFactor
             centralityOutput.write("%6.4f  %d  %d  %d  %18.8e  %18.8e  %18.8e  %18.8e \n" % (cenCentral, Npartmean, Npartmin, Npartmax, dSdymin, dSdymax, bmin, bmax))
-            fetchedData = array(self.db.executeSQLquery("select ecc_id, n, ecc_real, ecc_imag from eccentricities where event_id in (select event_id from collisionParameters order by -collisionParameters.%s limit %d offset %d)" % (cutType, nsample, noffset)).fetchall())
+            if cutType == 'b':
+                fetchedData = array(self.db.executeSQLquery("select ecc_id, n, ecc_real, ecc_imag from eccentricities where event_id in (select event_id from collisionParameters order by collisionParameters.%s limit %d offset %d)" % (cutType, nsample, noffset)).fetchall())
+            else:
+                fetchedData = array(self.db.executeSQLquery("select ecc_id, n, ecc_real, ecc_imag from eccentricities where event_id in (select event_id from collisionParameters order by -collisionParameters.%s limit %d offset %d)" % (cutType, nsample, noffset)).fetchall())
             for eccType in range(1,3):
                 tempidx = (fetchedData[:,0] == eccType)
                 tempdata = fetchedData[tempidx, :]
