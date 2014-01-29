@@ -720,7 +720,7 @@ class EbeCollector(object):
         # close connection to commit changes
         db.closeConnection()
 
-    def collectInitialeccnStatistics(self, folder, db, multiplicityFactor = 1.0):
+    def collectInitialeccnStatistics(self, folder, db, multiplicityFactor = 1.0, deformedNuclei = False):
         """
             This function collects eccn, Npart, Ncoll, dS/dy, impact parameter from
             superMC output files into database.
@@ -734,6 +734,8 @@ class EbeCollector(object):
         # next create the eccentricities and collisionParameters table
         db.createTableIfNotExists("eccentricities", (("event_id","integer"), ("ecc_id", "integer"), ("n","integer"), ("ecc_real","real"), ("ecc_imag","real")))
         db.createTableIfNotExists("collisionParameters", (("event_id","integer"), ("Npart", "integer"), ("Ncoll","integer"), ("b","real"), ("total_entropy","real")))
+        if(deformedNuclei):
+            db.createTableIfNotExists("deformationParameters", (("event_id","integer"), ("cosTheta1", "real"), ("phi1","real"), ("cosTheta2","real"), ("phi2","real")))
 
         # the big loop
         for ecc_id, ecc_type_name in typeCollections:
@@ -745,7 +747,14 @@ class EbeCollector(object):
                     dSdy = data[:,6]/multiplicityFactor   #scale out the multiplicity factor used in superMC
                     b = data[:,7]
                     for event_id in range(len(Npart)):
-                       db.insertIntoTable("collisionParameters", (event_id, int(Npart[event_id]), int(Ncoll[event_id]), float(b[event_id]), float(dSdy[event_id])))
+                        db.insertIntoTable("collisionParameters", (event_id, int(Npart[event_id]), int(Ncoll[event_id]), float(b[event_id]), float(dSdy[event_id])))
+                    if(deformedNuclei):
+                        cosTheta1 = data[:,8]
+                        phi1 = data[:,9]
+                        cosTheta2 = data[:,10]
+                        phi2 = data[:,11]
+                        for event_id in range(len(Npart)):
+                            db.insertIntoTable("deformationParameters", (event_id, float(cosTheta1[event_id]), float(phi1[event_id]), float(cosTheta2[event_id]), float(phi2[event_id])))
                 eccReal = data[:,2]
                 eccImag = data[:,3]
                 for event_id in range(len(eccReal)):
@@ -886,7 +895,7 @@ class EbeCollector(object):
                 exit(-1)
 
     
-    def collectMinbiasEcc(self, folder, databaseFilename="MinbiasEcc.db", multiplicityFactor = 1.0):
+    def collectMinbiasEcc(self, folder, databaseFilename="MinbiasEcc.db", multiplicityFactor = 1.0, deformed = False):
         """
             This function collects initial eccn statistical information from minimum bias events generated from  superMC
             outputs into a database
@@ -896,7 +905,7 @@ class EbeCollector(object):
         print("-"*80)
         print("Collecting initial minimum bias events information from superMC outputs...")
         print("-"*80)
-        self.collectInitialeccnStatistics(folder, db, multiplicityFactor) # collect eccn information from data files
+        self.collectInitialeccnStatistics(folder, db, multiplicityFactor, deformed) # collect eccn information from data files
 
 
     def mergeDatabases(self, toDB, fromDB):
