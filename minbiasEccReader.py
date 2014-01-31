@@ -101,6 +101,7 @@ class minbiasEccReader(object):
     def getDistribution(self, disType = 'total_entropy', nbin = 30, cutType = 'total_entropy', centralityBound = [0, 100]):
         """
             this function bin and output distribution of a given quantity in a given centrality bin
+            output format: X, P(X), P(X)_err, dP(X)/dX, dP(X)/dX_err
         """
         nevent = self.Nev
         lowerbound = centralityBound[0]
@@ -108,12 +109,25 @@ class minbiasEccReader(object):
         nsample = int(nevent*(upperbound - lowerbound)/100)-1
         noffset = int(nevent*lowerbound/100)
         if disType in ['Npart', 'Ncoll', 'b', 'total_entropy']:
-            fetchedData = array(self.db.executeSQLquery("select %s from collisionParameters order by -%s limit %d offset %d" % (disType, cutType, nsample, noffset)).fetchall())
+            if cutType in ['Npart', 'Ncoll', 'total_entropy']:
+                fetchedData = array(self.db.executeSQLquery("select %s from collisionParameters order by -%s limit %d offset %d" % (disType, cutType, nsample, noffset)).fetchall())
+            elif cutType in ['b']:
+                fetchedData = array(self.db.executeSQLquery("select %s from collisionParameters order by %s limit %d offset %d" % (disType, cutType, nsample, noffset)).fetchall())
         elif 'ecc' in disType:
             temp = disType.split('_')
             eccorder = int(temp[1])
-            tempData = array(self.db.executeSQLquery("select ecc_real, ecc_imag from eccentricities where ecc_id = 2 and n = %d and event_id in (select event_id from collisionParameters order by -collisionParameters.%s limit %d offset %d)" % (eccorder, cutType, nsample, noffset)).fetchall())
+            if cutType in ['Npart', 'Ncoll', 'total_entropy']:
+                tempData = array(self.db.executeSQLquery("select ecc_real, ecc_imag from eccentricities where ecc_id = 2 and n = %d and event_id in (select event_id from collisionParameters order by -collisionParameters.%s limit %d offset %d)" % (eccorder, cutType, nsample, noffset)).fetchall())
+            elif cutType in ['b']:
+                tempData = array(self.db.executeSQLquery("select ecc_real, ecc_imag from eccentricities where ecc_id = 2 and n = %d and event_id in (select event_id from collisionParameters order by collisionParameters.%s limit %d offset %d)" % (eccorder, cutType, nsample, noffset)).fetchall())
             fetchedData = sqrt(tempData[:,0]**2 + tempData[:,1]**2)
+        elif 'deformed' in disType:
+            temp = disType.split('_')
+            disQuantity = temp[1]
+            if cutType in ['Npart', 'Ncoll', 'total_entropy']:
+                fetchedData = array(self.db.executeSQLquery("select %s from deformationParameters where event_id in (select event_id from collisionParameters order by -collisionParameters.%s limit %d offset %d)" % (disQuantity, cutType, nsample, noffset)).fetchall())
+            elif cutType in ['b']:
+                fetchedData = array(self.db.executeSQLquery("select %s from deformationParameters where event_id in (select event_id from collisionParameters order by collisionParameters.%s limit %d offset %d)" % (disQuantity, cutType, nsample, noffset)).fetchall())
             
         binnedData, binnedData_err = getBinnedAveragedDatawithErrorbars(fetchedData, nbin)
         disOutput = open('%s_distribution_C%d-%d_%s.dat' % (disType, int(centralityBound[0]), int(centralityBound[1]), cutType), 'w')

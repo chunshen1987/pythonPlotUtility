@@ -13,6 +13,7 @@ red = "\033[91m"
 normal = "\033[0m"
 
 def printHelpMessageandQuit():
+    print "minbias_distribution output X, P(X), P(X)_err, dP(X)/dX, dP(X)/dX_err"
     print "Usage : "
     print "minbias_distribution %s -disType disType -nbin nbin -cutType cutType -cen centralityBoundary" % (purple + 'databaseName' + normal)
     print "Usage of minbias_CentralityCut command line arguments: "
@@ -35,7 +36,7 @@ if __name__ == "__main__":
         option = argv[2]; del argv[2]
         if option == '-disType':
             disType = str(argv[2]); del argv[2]
-            if not disType in ['Npart', 'Ncoll', 'b', 'total_entropy'] and not 'ecc' in disType:
+            if not disType in ['Npart', 'Ncoll', 'b', 'total_entropy'] and not 'ecc' in disType and not 'deformed' in disType:
                 print argv[0], ": invalid disType", red + disType + normal
                 printHelpMessageandQuit()
         elif option == '-cutType':
