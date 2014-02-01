@@ -13,11 +13,11 @@ red = "\033[91m"
 normal = "\033[0m"
 
 def printHelpMessageandQuit():
-    print "minbias_distribution output X, P(X), P(X)_err, dP(X)/dX, dP(X)/dX_err"
+    print "minbias_distribution outputs" + purple + " X, P(X), P(X)_err, dP(X)/dX, dP(X)/dX_err" + normal
     print "Usage : "
     print "minbias_distribution %s -disType disType -nbin nbin -cutType cutType -cen centralityBoundary" % (purple + 'databaseName' + normal)
     print "Usage of minbias_CentralityCut command line arguments: "
-    print "-disType   the type of quantity of the output distribution: " + green + " Npart, Ncoll, b, total_entropy" + normal
+    print "-disType   the type of quantity of the output distribution: " + green + " Npart, Ncoll, b, total_entropy, ecc_n, deformed_cosTheta1" + normal
     print "-nbin      set number of bins "
     print "-cutType   the type of quantity used to cut centrality: " + green + " Npart, Ncoll, b, total_entropy" + normal
     print "-cen       the boundary of centrality cut: " + purple + " e.g. 0-5" + normal
@@ -55,4 +55,4 @@ if __name__ == "__main__":
             print argv[0], ': invalid option', option
             printHelpMessageandQuit()
     reader = minbiasEccReader(dbName)
-    reader.getDistribution(disType, nbin, cutType, centralityBound = cen)
+    print(reader.getDistribution(disType, nbin, cutType, centralityBound = cen))
