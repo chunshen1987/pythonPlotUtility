@@ -130,7 +130,7 @@ class minbiasEccReader(object):
                 fetchedData = array(self.db.executeSQLquery("select %s from deformationParameters where event_id in (select event_id from collisionParameters order by collisionParameters.%s limit %d offset %d)" % (disQuantity, cutType, nsample, noffset)).fetchall())
             
         binnedData, binnedData_err = getBinnedAveragedDatawithErrorbars(fetchedData, nbin)
-        disOutput = open('%s_distribution_C%d-%d_%s.dat' % (disType, int(centralityBound[0]), int(centralityBound[1]), cutType), 'w')
+        disOutput = open('%s_distribution_C%g-%g_%s.dat' % (disType, centralityBound[0], centralityBound[1], cutType), 'w')
         for i in range(nbin):
             disOutput.write("%18.8e  %18.8e  %18.8e  %18.8e   %18.8e\n" % (binnedData[i,0], binnedData[i,1], binnedData_err[i,1], binnedData[i,2], binnedData_err[i,2]))
         disOutput.close()
