@@ -43,7 +43,7 @@ class particleReader(object):
                                   "xi_m", "anti_xi_m"]
 
         # create index for the particle_list table
-        if not self.db.doesTableExist("particleListIndex"):
+        if not self.db.doesIndexExist("particleListIndex"):
             print("Create index for particle_list table ...")
             self.db.executeSQLquery("CREATE INDEX particleListIndex ON particle_list (hydroEvent_id, UrQMDEvent_id, pid);")
 
@@ -61,7 +61,7 @@ class particleReader(object):
         if self.db.createTableIfNotExists("UrQMD_NevList", (("hydroEventId", "integer"), ("Number_of_UrQMDevents", "integer"))):
             for hydroEventId in range(1, self.hydroNev+1):
                 UrQMDNev = self.getNumberOfUrQMDEvents(hydroEventId)
-                self.db.insertIntoTable("UrQMD_NevList", (int(self.hydroNev), int(UrQMDNev)))
+                self.db.insertIntoTable("UrQMD_NevList", (int(hydroEventId), int(UrQMDNev)))
             self.db._dbCon.commit()  # commit changes
 
     ################################################################################
