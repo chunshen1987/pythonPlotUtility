@@ -42,6 +42,11 @@ class particleReader(object):
                                   "sigma_p", "sigma_m", "anti_sigma_p", "anti_sigma_m",
                                   "xi_m", "anti_xi_m"]
 
+        # create index for the particle_list table
+        if not self.db.doesTableExist("particleListIndex"):
+            print("Create index for particle_list table ...")
+            self.db.executeSQLquery("CREATE INDEX particleListIndex ON particle_list (hydroEvent_id, UrQMDEvent_id, pid);")
+
         # get number of events
         # pre-collect it to shorten the initial loading time of the database
         if self.db.createTableIfNotExists("number_of_events", (("Nev_tot", "integer"), ("Nev_hydro", "integer"))):

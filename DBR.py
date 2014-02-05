@@ -122,6 +122,12 @@ class SqliteDB(object):
         """
         return [item[1] for item in self._executeSQL("select * from sqlite_master") if item[0]=="table"] # returned item: (type, name, tbl_name, rootpage, sql)
 
+    def getAllindexNames(self):
+        """
+            Return a list of index names from the registered database.
+        """
+        return [item[1] for item in self._executeSQL("select * from sqlite_master") if item[0]=="index"] # returned item: (type, name, tbl_name, rootpage, sql)
+        
     def getTableInfo(self, tableName):
         """
             Return a list of the form ('field', 'type') for all fields in the
@@ -135,6 +141,13 @@ class SqliteDB(object):
             database.
         """
         return tableName in self.getAllTableNames()
+
+    def doesIndexExist(self, indexName):
+        """
+            Returns True if the index with name "indexName" exists in the
+            database.
+        """
+        return indexName in self.getAllindexNames()
 
     def createTableIfNotExists(self, tableName, nameAndTypeList):
         """
