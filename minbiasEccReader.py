@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 
 from sys import argv, exit
-from os import path, remove
+from os import path
 from DBR import SqliteDB
 from numpy import *
 from CSplottools import getBinnedAveragedDatawithErrorbars
@@ -12,130 +12,210 @@ green = "\033[92m"
 red = "\033[91m"
 normal = "\033[0m"
 
-class minbiasEccReader(object):
+
+class MinbiasEccReader(object):
     """
-        This class contains functions to perform statistical analysis on initial eccentricities
-        from minimum bias events generated from superMC
+        This class contains functions to perform statistical analysis on initial
+        eccentricities from minimum bias events generated from superMC
     """
-    def __init__(self, databaseName):
+
+    def __init__(self, database_name):
         """
             Register a sqlite database
         """
         # setup database
-        if isinstance(databaseName, str):
-            if path.exists(databaseName):
-                database = SqliteDB(databaseName)
-                self.dbName = databaseName
+        database = None
+        if isinstance(database_name, str):
+            if path.exists(database_name):
+                database = SqliteDB(database_name)
+                self.db_name = database_name
             else:
-                raise ValueError("EbeDBReader.__init__: the input argument must be an existing database file. %s can not be found" % (red + databaseName + normal))
+                raise ValueError("EbeDBReader.__init__: the input argument must"
+                                 " be an existing database file. %s can not be "
+                                 "found" % (red + database_name + normal))
         if isinstance(database, SqliteDB):
             self.db = database
         else:
-            raise TypeError("EbeDBReader.__init__: the input argument must be a string or a SqliteDB database.")
+            raise TypeError("EbeDBReader.__init__: the input argument must be a "
+                            "string or a SqliteDB database.")
 
         # define centrality boundaries
-        self.centralityBoundaries = [(0,0.2),(0,1),(0,5),(5,10),(10,20),(20,30),
-                                     (30,40),(40,50),(50,60),(60,70),(70,80)]
+        self.centrality_boundaries = [(0, 0.2), (0, 1), (0, 5), (5, 10), (10, 20), (20, 30),
+                                      (30, 40), (40, 50), (50, 60), (60, 70), (70, 80)]
 
         # get total number of events
-        self.Nev = self.getNumberofEvents()
-     
-    def getNumberofEvents(self):
-        Nev = self.db.executeSQLquery("select count(*) from collisionParameters").fetchall()[0][0]
-        return(Nev)
+        self.nev = self.get_number_of_events()
 
-    def cutCentralitieswitheccStatistics(self, cutType, multiplicityFactor = 1.0):
-        """
-            this function cut the centralities and also output event averaged ecc_n with 
-            statistical error
-        """
-        print 'cutting centralities from database %s according to %s ....' % (purple + self.dbName + normal, green + cutType + normal)
-        centralityOutput = open('centralityCut_%s.dat' % cutType, 'w')
-        eccnStatedOutput = open('eccnStatistics_ed_%s.dat' % cutType, 'w')
-        eccnStatsdOutput = open('eccnStatistics_sd_%s.dat' % cutType, 'w')
-        nevent = self.Nev
+    def get_number_of_events(self):
+        nev = self.db.executeSQLquery("select count(*) from "
+                                      "collisionParameters").fetchall()[0][0]
+        return nev
 
-        for icen in range(len(self.centralityBoundaries)):
-            lowerbound = self.centralityBoundaries[icen][0]
-            upperbound = self.centralityBoundaries[icen][1]
-            nsample = int(nevent*(upperbound - lowerbound)/100)-1
-            noffset = int(nevent*lowerbound/100)
-            if cutType == 'b':
-                fetchedData = array(self.db.executeSQLquery("select Npart, b, total_entropy from collisionParameters order by %s limit %d offset %d" % (cutType, nsample, noffset)).fetchall())
+    def cut_centralities_with_ecc_statistics(self, cut_type,
+                                             multiplicity_factor=1.0):
+        """
+            this function cut the centralities and also output event averaged
+            ecc_n with statistical error
+        """
+        print ('cutting centralities from database %s according to %s ....'
+               % (purple + self.db_name + normal, green + cut_type + normal))
+        centrality_output = open('centralityCut_%s.dat' % cut_type, 'w')
+        eccnStated_output = open('eccnStatistics_ed_%s.dat' % cut_type, 'w')
+        eccnStatsd_output = open('eccnStatistics_sd_%s.dat' % cut_type, 'w')
+        nevent = self.nev
+
+        for icen in range(len(self.centrality_boundaries)):
+            lowerbound = self.centrality_boundaries[icen][0]
+            upperbound = self.centrality_boundaries[icen][1]
+            nsample = int(nevent * (upperbound - lowerbound) / 100) - 1
+            noffset = int(nevent * lowerbound / 100)
+            if cut_type == 'b':
+                fetched_data = array(self.db.executeSQLquery(
+                    "select Npart, b, total_entropy from collisionParameters "
+                    "order by %s limit %d offset %d"
+                    % (cut_type, nsample, noffset)
+                ).fetchall())
             else:
-                fetchedData = array(self.db.executeSQLquery("select Npart, b, total_entropy from collisionParameters order by -%s limit %d offset %d" % (cutType, nsample, noffset)).fetchall())
-            cenCentral = (upperbound + lowerbound)/2.
-            Npartmean = mean(fetchedData[:,0])
-            Npartmin = min(fetchedData[:,0]); Npartmax = max(fetchedData[:,0])
-            bmin = min(fetchedData[:,1]); bmax = max(fetchedData[:,1])
-            dSdymin = min(fetchedData[:,2])/multiplicityFactor; dSdymax = max(fetchedData[:,2])/multiplicityFactor
-            centralityOutput.write("%6.4f  %d  %d  %d  %18.8e  %18.8e  %18.8e  %18.8e \n" % (cenCentral, Npartmean, Npartmin, Npartmax, dSdymin, dSdymax, bmin, bmax))
-            if cutType == 'b':
-                fetchedData = array(self.db.executeSQLquery("select ecc_id, n, ecc_real, ecc_imag from eccentricities where event_id in (select event_id from collisionParameters order by collisionParameters.%s limit %d offset %d)" % (cutType, nsample, noffset)).fetchall())
+                fetched_data = array(self.db.executeSQLquery(
+                    "select Npart, b, total_entropy from collisionParameters "
+                    "order by -%s limit %d offset %d"
+                    % (cut_type, nsample, noffset)
+                ).fetchall())
+            cen_central = (upperbound + lowerbound) / 2.
+            npart_mean = mean(fetched_data[:, 0])
+            npart_min = min(fetched_data[:, 0])
+            npart_max = max(fetched_data[:, 0])
+            bmin = min(fetched_data[:, 1])
+            bmax = max(fetched_data[:, 1])
+            dsdymin = min(fetched_data[:, 2]) / multiplicity_factor
+            dsdymax = max(fetched_data[:, 2]) / multiplicity_factor
+            centrality_output.write(
+                "%6.4f  %d  %d  %d  %18.8e  %18.8e  %18.8e  %18.8e \n"
+                % (cen_central, npart_mean, npart_min, npart_max, dsdymin,
+                   dsdymax, bmin, bmax)
+            )
+            if cut_type == 'b':
+                fetched_data = array(self.db.executeSQLquery(
+                    "select ecc_id, n, ecc_real, ecc_imag from eccentricities "
+                    "where event_id in (select event_id from "
+                    "collisionParameters order by collisionParameters.%s "
+                    "limit %d offset %d)"
+                    % (cut_type, nsample, noffset)
+                ).fetchall())
             else:
-                fetchedData = array(self.db.executeSQLquery("select ecc_id, n, ecc_real, ecc_imag from eccentricities where event_id in (select event_id from collisionParameters order by -collisionParameters.%s limit %d offset %d)" % (cutType, nsample, noffset)).fetchall())
-            for eccType in range(1,3):
-                tempidx = (fetchedData[:,0] == eccType)
-                tempdata = fetchedData[tempidx, :]
-                eccOutput = []
-                for iorder in range(1,10):
-                    idx = (tempdata[:,1] == iorder)
-                    eccn2 = sqrt(mean(tempdata[idx,2]**2 + tempdata[idx,3]**2))
-                    eccn2err = std(tempdata[idx,2]**2 + tempdata[idx,3]**2)/(2.*eccn2)/sqrt(nsample)
-                    eccOutput += [eccn2, eccn2err]
-                if eccType == 1:
-                   eccnStatsdOutput.write("%6.4f  " % cenCentral)
-                   for tempecc in eccOutput:
-                      eccnStatsdOutput.write("%18.8e  " % tempecc)
-                   eccnStatsdOutput.write("\n")
-                elif eccType == 2:
-                   eccnStatedOutput.write("%6.4f  " % cenCentral)
-                   for tempecc in eccOutput:
-                      eccnStatedOutput.write("%18.8e  " % tempecc)
-                   eccnStatedOutput.write("\n")
+                fetched_data = array(self.db.executeSQLquery(
+                    "select ecc_id, n, ecc_real, ecc_imag from eccentricities "
+                    "where event_id in (select event_id from "
+                    "collisionParameters order by -collisionParameters.%s "
+                    "limit %d offset %d)"
+                    % (cut_type, nsample, noffset)
+                ).fetchall())
+            for ecc_type in range(1, 3):
+                tempidx = (fetched_data[:, 0] == ecc_type)
+                temp_data = fetched_data[tempidx, :]
+                ecc_output = []
+                for iorder in range(1, 10):
+                    idx = (temp_data[:, 1] == iorder)
+                    eccn2 = sqrt(mean(temp_data[idx, 2] ** 2 + temp_data[idx, 3] ** 2))
+                    eccn2err = (std(temp_data[idx, 2] ** 2 + temp_data[idx, 3] ** 2)
+                                / (2. * eccn2) / sqrt(nsample))
+                    ecc_output += [eccn2, eccn2err]
+                if ecc_type == 1:
+                    eccnStatsd_output.write("%6.4f  " % cen_central)
+                    for tempecc in ecc_output:
+                        eccnStatsd_output.write("%18.8e  " % tempecc)
+                    eccnStatsd_output.write("\n")
+                elif ecc_type == 2:
+                    eccnStated_output.write("%6.4f  " % cen_central)
+                    for tempecc in ecc_output:
+                        eccnStated_output.write("%18.8e  " % tempecc)
+                    eccnStated_output.write("\n")
 
-        centralityOutput.close()
-        eccnStatsdOutput.close()
-        eccnStatedOutput.close()
-    
-    def getDistribution(self, disType = 'total_entropy', nbin = 30, cutType = 'total_entropy', centralityBound = [0, 100]):
+        centrality_output.close()
+        eccnStatsd_output.close()
+        eccnStated_output.close()
+
+    def get_distribution(self, dis_type='total_entropy', nbin=30,
+                         cut_type='total_entropy', centrality_bound=[0, 100]):
         """
-            this function bin and output distribution of a given quantity in a given centrality bin
-            output format: X, P(X), P(X)_err, dP(X)/dX, dP(X)/dX_err
+            this function bin and output distribution of a given quantity
+            in a given centrality bin output format:
+            X, P(X), P(X)_err, dP(X)/dX, dP(X)/dX_err
         """
-        nevent = self.Nev
-        lowerbound = centralityBound[0]
-        upperbound = centralityBound[1]
-        nsample = int(nevent*(upperbound - lowerbound)/100)-1
-        noffset = int(nevent*lowerbound/100)
-        if disType in ['Npart', 'Ncoll', 'b', 'total_entropy']:
-            if cutType in ['Npart', 'Ncoll', 'total_entropy']:
-                fetchedData = array(self.db.executeSQLquery("select %s from collisionParameters order by -%s limit %d offset %d" % (disType, cutType, nsample, noffset)).fetchall())
-            elif cutType in ['b']:
-                fetchedData = array(self.db.executeSQLquery("select %s from collisionParameters order by %s limit %d offset %d" % (disType, cutType, nsample, noffset)).fetchall())
-        elif 'ecc' in disType:
-            temp = disType.split('_')
+        nevent = self.nev
+        lowerbound = centrality_bound[0]
+        upperbound = centrality_bound[1]
+        nsample = int(nevent * (upperbound - lowerbound) / 100) - 1
+        noffset = int(nevent * lowerbound / 100)
+        if dis_type in ['Npart', 'Ncoll', 'b', 'total_entropy']:
+            if cut_type in ['Npart', 'Ncoll', 'total_entropy']:
+                fetched_data = array(self.db.executeSQLquery(
+                    "select %s from collisionParameters order by -%s limit "
+                    "%d offset %d"
+                    % (dis_type, cut_type, nsample, noffset)
+                ).fetchall())
+            elif cut_type in ['b']:
+                fetched_data = array(self.db.executeSQLquery(
+                    "select %s from collisionParameters order by %s limit "
+                    "%d offset %d"
+                    % (dis_type, cut_type, nsample, noffset)
+                ).fetchall())
+        elif 'ecc' in dis_type:
+            temp = dis_type.split('_')
             eccorder = int(temp[1])
-            if cutType in ['Npart', 'Ncoll', 'total_entropy']:
-                tempData = array(self.db.executeSQLquery("select ecc_real, ecc_imag from eccentricities where ecc_id = 2 and n = %d and event_id in (select event_id from collisionParameters order by -collisionParameters.%s limit %d offset %d)" % (eccorder, cutType, nsample, noffset)).fetchall())
-            elif cutType in ['b']:
-                tempData = array(self.db.executeSQLquery("select ecc_real, ecc_imag from eccentricities where ecc_id = 2 and n = %d and event_id in (select event_id from collisionParameters order by collisionParameters.%s limit %d offset %d)" % (eccorder, cutType, nsample, noffset)).fetchall())
-            fetchedData = sqrt(tempData[:,0]**2 + tempData[:,1]**2)
-        elif 'deformed' in disType:
-            temp = disType.split('_')
-            disQuantity = temp[1]
-            if cutType in ['Npart', 'Ncoll', 'total_entropy']:
-                fetchedData = array(self.db.executeSQLquery("select %s from deformationParameters where event_id in (select event_id from collisionParameters order by -collisionParameters.%s limit %d offset %d)" % (disQuantity, cutType, nsample, noffset)).fetchall())
-            elif cutType in ['b']:
-                fetchedData = array(self.db.executeSQLquery("select %s from deformationParameters where event_id in (select event_id from collisionParameters order by collisionParameters.%s limit %d offset %d)" % (disQuantity, cutType, nsample, noffset)).fetchall())
-            
-        binnedData, binnedData_err = getBinnedAveragedDatawithErrorbars(fetchedData, nbin)
-        disOutput = open('%s_distribution_C%g-%g_%s.dat' % (disType, centralityBound[0], centralityBound[1], cutType), 'w')
+            if cut_type in ['Npart', 'Ncoll', 'total_entropy']:
+                temp_data = array(self.db.executeSQLquery(
+                    "select ecc_real, ecc_imag from eccentricities where "
+                    "ecc_id = 2 and n = %d and event_id in (select "
+                    "event_id from collisionParameters order by "
+                    "-collisionParameters.%s limit %d offset %d)"
+                    % (eccorder, cut_type, nsample, noffset)
+                ).fetchall())
+            elif cut_type in ['b']:
+                temp_data = array(self.db.executeSQLquery(
+                    "select ecc_real, ecc_imag from eccentricities where "
+                    "ecc_id = 2 and n = %d and event_id in (select "
+                    "event_id from collisionParameters order by "
+                    "collisionParameters.%s limit %d offset %d)"
+                    % (eccorder, cut_type, nsample, noffset)).fetchall())
+            fetched_data = sqrt(temp_data[:, 0] ** 2 + temp_data[:, 1] ** 2)
+        elif 'deformed' in dis_type:
+            temp = dis_type.split('_')
+            dis_quantity = temp[1]
+            if cut_type in ['Npart', 'Ncoll', 'total_entropy']:
+                fetched_data = array(self.db.executeSQLquery(
+                    "select %s from deformationParameters where event_id "
+                    "in (select event_id from collisionParameters order "
+                    "by -collisionParameters.%s limit %d offset %d)"
+                    % (dis_quantity, cut_type, nsample, noffset)
+                ).fetchall())
+            elif cut_type in ['b']:
+                fetched_data = array(self.db.executeSQLquery(
+                    "select %s from deformationParameters where event_id "
+                    "in (select event_id from collisionParameters order "
+                    "by collisionParameters.%s limit %d offset %d)"
+                    % (dis_quantity, cut_type, nsample, noffset)
+                ).fetchall())
+        else:
+            raise TypeError("unrecognized distriubtion type.")
+
+        binned_data, binned_data_err = getBinnedAveragedDatawithErrorbars(
+            fetched_data, nbin)
+        dis_output = open('%s_distribution_C%g-%g_%s.dat'
+                          % (dis_type, centrality_bound[0],
+                             centrality_bound[1], cut_type), 'w')
         for i in range(nbin):
-            disOutput.write("%18.8e  %18.8e  %18.8e  %18.8e   %18.8e\n" % (binnedData[i,0], binnedData[i,1], binnedData_err[i,1], binnedData[i,2], binnedData_err[i,2]))
-        disOutput.close()
-        return(array([binnedData[:,0], binnedData[:,1], binnedData_err[:,1], binnedData[:,2], binnedData_err[:,2]]).transpose())
+            dis_output.write(
+                "%18.8e  %18.8e  %18.8e  %18.8e   %18.8e\n"
+                % (binned_data[i, 0], binned_data[i, 1], binned_data_err[i, 1],
+                   binned_data[i, 2], binned_data_err[i, 2])
+            )
+        dis_output.close()
+        return array([binned_data[:, 0], binned_data[:, 1],
+                      binned_data_err[:, 1], binned_data[:, 2],
+                      binned_data_err[:, 2]]).transpose()
+
 
 if __name__ == "__main__":
     reader = minbiasEccReader(str(argv[1]))
-    reader.cutCentralitieswitheccStatistics('total_entropy', 1.0)
+    reader.cut_centralities_with_ecc_statistics('total_entropy', 1.0)
