@@ -558,7 +558,7 @@ class particleReader(object):
                 UrQMDNev = self.db.executeSQLquery("select Number_of_UrQMDevents from UrQMD_NevList where hydroEventId = %d " % hydroId).fetchall()[0][0]
                 for UrQMDId in range(1, UrQMDNev+1):
                     print("processing event: (%d, %d) " % (hydroId, UrQMDId))
-                    particleList = array(self.db.executeSQLquery("select pT, phi_p from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and (%s)" % (hydroId, UrQMDId, pidString)).fetchall())
+                    particleList = array(self.db.executeSQLquery("select pT, phi_p, pseudorapidity from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and (%s)" % (hydroId, UrQMDId, pidString)).fetchall())
                     pT = particleList[:,0]
                     phi = particleList[:,1]
                     eta = particleList[:,2]
