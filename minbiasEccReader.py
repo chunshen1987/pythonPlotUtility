@@ -43,7 +43,7 @@ class MinbiasEccReader(object):
 
         # generate index for the database if not exist
         self.db.executeSQLquery(
-            'CREATE INDEX IF NOT EXISTS CollisionParameterindex ON'
+            'CREATE INDEX IF NOT EXISTS CollisionParameterindex ON '
             'collisionParameters(total_entropy, Npart, event_id)'
         )
         self.db.executeSQLquery(
@@ -57,7 +57,7 @@ class MinbiasEccReader(object):
             (40, 50), (50, 60), (60, 70), (70, 80)]
 
         # get total number of events
-        self.nev = self.get_number_of_events
+        self.nev = self.get_number_of_events()
 
     def get_number_of_events(self):
         nev = self.db.executeSQLquery(
