@@ -41,12 +41,6 @@ class MinbiasEccReader(object):
                 "EbeDBReader.__init__: the input argument must be a string "
                 "or a SqliteDB database.")
 
-        # generate index for the database if not exist
-        self.db.executeSQLquery(
-            'CREATE INDEX IF NOT EXISTS ecc_index ON '
-            'eccentricities(event_id, ecc_id, n)'
-        )
-
         # define centrality boundaries
         self.centrality_boundaries = [
             (0, 0.2), (0, 1), (0, 5), (5, 10), (10, 20), (20, 30), (30, 40),
