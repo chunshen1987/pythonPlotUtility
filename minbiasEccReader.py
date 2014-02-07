@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-from sys import argv, exit
+from sys import argv
 from os import path
 from DBR import SqliteDB
 from numpy import *
@@ -15,8 +15,8 @@ normal = "\033[0m"
 
 class MinbiasEccReader(object):
     """
-        This class contains functions to perform statistical analysis on initial
-        eccentricities from minimum bias events generated from superMC
+        This class contains functions to perform statistical analysis on
+        initial eccentricities from minimum bias events generated from superMC
     """
 
     def __init__(self, database_name):
@@ -30,29 +30,42 @@ class MinbiasEccReader(object):
                 database = SqliteDB(database_name)
                 self.db_name = database_name
             else:
-                raise ValueError("EbeDBReader.__init__: the input argument must"
-                                 " be an existing database file. %s can not be "
-                                 "found" % (red + database_name + normal))
+                raise ValueError(
+                    "EbeDBReader.__init__: the input argument must be an "
+                    "existing database file. %s can not be found"
+                    % (red + database_name + normal))
         if isinstance(database, SqliteDB):
             self.db = database
         else:
-            raise TypeError("EbeDBReader.__init__: the input argument must be a "
-                            "string or a SqliteDB database.")
+            raise TypeError(
+                "EbeDBReader.__init__: the input argument must be a string "
+                "or a SqliteDB database.")
+
+        # generate index for the database if not exist
+        self.db.executeSQLquery(
+            'CREATE INDEX IF NOT EXISTS CollisionParameterindex ON'
+            'collisionParameters(total_entropy, Npart, event_id)'
+        )
+        self.db.executeSQLquery(
+            'CREATE INDEX IF NOT EXISTS ecc_index ON '
+            'eccentricities(event_id, n, ecc_id)'
+        )
 
         # define centrality boundaries
-        self.centrality_boundaries = [(0, 0.2), (0, 1), (0, 5), (5, 10), (10, 20), (20, 30),
-                                      (30, 40), (40, 50), (50, 60), (60, 70), (70, 80)]
+        self.centrality_boundaries = [
+            (0, 0.2), (0, 1), (0, 5), (5, 10), (10, 20), (20, 30), (30, 40),
+            (40, 50), (50, 60), (60, 70), (70, 80)]
 
         # get total number of events
-        self.nev = self.get_number_of_events()
+        self.nev = self.get_number_of_events
 
     def get_number_of_events(self):
-        nev = self.db.executeSQLquery("select count(*) from "
-                                      "collisionParameters").fetchall()[0][0]
+        nev = self.db.executeSQLquery(
+            "select count(*) from collisionParameters").fetchall()[0][0]
         return nev
 
-    def cut_centralities_with_ecc_statistics(self, cut_type,
-                                             multiplicity_factor=1.0):
+    def cut_centralities_with_ecc_statistics(
+            self, cut_type, multiplicity_factor=1.0):
         """
             this function cut the centralities and also output event averaged
             ecc_n with statistical error
@@ -60,8 +73,8 @@ class MinbiasEccReader(object):
         print ('cutting centralities from database %s according to %s ....'
                % (purple + self.db_name + normal, green + cut_type + normal))
         centrality_output = open('centralityCut_%s.dat' % cut_type, 'w')
-        eccnStated_output = open('eccnStatistics_ed_%s.dat' % cut_type, 'w')
-        eccnStatsd_output = open('eccnStatistics_sd_%s.dat' % cut_type, 'w')
+        eccn_stat_ed_output = open('eccnStatistics_ed_%s.dat' % cut_type, 'w')
+        eccn_stat_sd_output = open('eccnStatistics_sd_%s.dat' % cut_type, 'w')
         nevent = self.nev
 
         for icen in range(len(self.centrality_boundaries)):
@@ -116,24 +129,26 @@ class MinbiasEccReader(object):
                 ecc_output = []
                 for iorder in range(1, 10):
                     idx = (temp_data[:, 1] == iorder)
-                    eccn2 = sqrt(mean(temp_data[idx, 2] ** 2 + temp_data[idx, 3] ** 2))
-                    eccn2err = (std(temp_data[idx, 2] ** 2 + temp_data[idx, 3] ** 2)
+                    eccn2 = sqrt(mean(temp_data[idx, 2] ** 2
+                                      + temp_data[idx, 3] ** 2))
+                    eccn2err = (std(temp_data[idx, 2] ** 2
+                                    + temp_data[idx, 3] ** 2)
                                 / (2. * eccn2) / sqrt(nsample))
                     ecc_output += [eccn2, eccn2err]
                 if ecc_type == 1:
-                    eccnStatsd_output.write("%6.4f  " % cen_central)
+                    eccn_stat_sd_output.write("%6.4f  " % cen_central)
                     for tempecc in ecc_output:
-                        eccnStatsd_output.write("%18.8e  " % tempecc)
-                    eccnStatsd_output.write("\n")
+                        eccn_stat_sd_output.write("%18.8e  " % tempecc)
+                    eccn_stat_sd_output.write("\n")
                 elif ecc_type == 2:
-                    eccnStated_output.write("%6.4f  " % cen_central)
+                    eccn_stat_ed_output.write("%6.4f  " % cen_central)
                     for tempecc in ecc_output:
-                        eccnStated_output.write("%18.8e  " % tempecc)
-                    eccnStated_output.write("\n")
+                        eccn_stat_ed_output.write("%18.8e  " % tempecc)
+                    eccn_stat_ed_output.write("\n")
 
         centrality_output.close()
-        eccnStatsd_output.close()
-        eccnStated_output.close()
+        eccn_stat_sd_output.close()
+        eccn_stat_ed_output.close()
 
     def get_distribution(self, dis_type='total_entropy', nbin=30,
                          cut_type='total_entropy', centrality_bound=[0, 100]):
@@ -217,5 +232,5 @@ class MinbiasEccReader(object):
 
 
 if __name__ == "__main__":
-    reader = minbiasEccReader(str(argv[1]))
+    reader = MinbiasEccReader(str(argv[1]))
     reader.cut_centralities_with_ecc_statistics('total_entropy', 1.0)
