@@ -43,12 +43,8 @@ class MinbiasEccReader(object):
 
         # generate index for the database if not exist
         self.db.executeSQLquery(
-            'CREATE INDEX IF NOT EXISTS CollisionParameterindex ON '
-            'collisionParameters(total_entropy, Npart, event_id)'
-        )
-        self.db.executeSQLquery(
             'CREATE INDEX IF NOT EXISTS ecc_index ON '
-            'eccentricities(event_id, n, ecc_id)'
+            'eccentricities(event_id, ecc_id, n)'
         )
 
         # define centrality boundaries
