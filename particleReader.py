@@ -1,12 +1,11 @@
 #! /usr/bin/env python
 
 from sys import argv, exit
-from os import path, remove
+from os import path
 from DBR import SqliteDB
 from numpy import *
 from random import shuffle
 import scipy.special
-import time
 
 #define colors
 purple = "\033[95m"
@@ -14,84 +13,111 @@ green = "\033[92m"
 red = "\033[91m"
 normal = "\033[0m"
 
-class particleReader(object):
+
+class ParticleReader(object):
     """
-        This class is used to perform statistical analysis on particle database from UrQMD.
+        This class is used to perform statistical analysis on particle 
+        database from UrQMD.
     """
-    def __init__(self, database):
+    def __init__(self, database, analyzed_database = "analyzed_particles.db"):
         """
-            Register a sqlite database
+            Register databases
         """
-        # setup database
+        # setup database for analysis
         if isinstance(database, str):
             if path.exists(database):
                 database = SqliteDB(database)
             else:
-                raise ValueError("EbeDBReader.__init__: the input argument must be an existing database file.")
+                raise ValueError(
+                    "ParticleReader.__init__: input database %s can not be "
+                    "found!" % (database))
         if isinstance(database, SqliteDB):
             self.db = database
         else:
-            raise TypeError("EbeDBReader.__init__: the input argument must be a string or a SqliteDB database.")
+            raise TypeError(
+                "ParticleReader.__init__: the input database must be "
+                "a string or a SqliteDB database.")
+        if isinstance(analyzed_database, str):
+            self.analyzed_db = SqliteDB(analyzed_database)
+        else:
+            raise ValueError(
+                "ParticleReader.__init__: output database %s has to be a "
+                "string")
         # setup lookup tables
         self.pid_lookup = dict(self.db.selectFromTable("pid_lookup"))
 
         # define all charged hadrons
-        self.chargedHadronList = ["pion_p", "pion_m", 
-                                  "kaon_p", "kaon_m", 
-                                  "proton", "anti_proton",
-                                  "sigma_p", "sigma_m", "anti_sigma_p", "anti_sigma_m",
-                                  "xi_m", "anti_xi_m"]
+        self.charged_hadron_list = [
+            "pion_p", "pion_m", "kaon_p", "kaon_m", "proton", "anti_proton",
+            "sigma_p", "sigma_m", "anti_sigma_p", "anti_sigma_m",
+            "xi_m", "anti_xi_m"]
 
         # create index for the particle_list table
         if not self.db.doesIndexExist("particleListIndex"):
             print("Create index for particle_list table ...")
-            self.db.executeSQLquery("CREATE INDEX particleListIndex ON particle_list (hydroEvent_id, UrQMDEvent_id, pid);")
+            self.db.executeSQLquery(
+                "CREATE INDEX particleListIndex ON "
+                "particle_list (hydroEvent_id, UrQMDEvent_id, pid)")
 
         # get number of events
         # pre-collect it to shorten the initial loading time of the database
-        if self.db.createTableIfNotExists("number_of_events", (("Nev_tot", "integer"), ("Nev_hydro", "integer"))):
+        if self.db.createTableIfNotExists(
+                "number_of_events", (("Nev_tot", "integer"),
+                                     ("Nev_hydro", "integer"))):
             self.totNev = self.getNumberOftotalEvents()
             self.hydroNev = self.getNumberOfHydroEvents()
-            self.db.insertIntoTable("number_of_events", (int(self.totNev), int(self.hydroNev)))
+            self.db.insertIntoTable("number_of_events",
+                                    (int(self.totNev), int(self.hydroNev)))
             self.db._dbCon.commit()  # commit changes
         else:
-            self.totNev = self.db.executeSQLquery("select Nev_tot from number_of_events").fetchall()[0][0]
-            self.hydroNev = self.db.executeSQLquery("select Nev_hydro from number_of_events").fetchall()[0][0]
+            self.totNev = self.db.executeSQLquery(
+                "select Nev_tot from number_of_events").fetchall()[0][0]
+            self.hydroNev = self.db.executeSQLquery(
+                "select Nev_hydro from number_of_events").fetchall()[0][0]
 
-        if self.db.createTableIfNotExists("UrQMD_NevList", (("hydroEventId", "integer"), ("Number_of_UrQMDevents", "integer"))):
+        if self.db.createTableIfNotExists(
+            "UrQMD_NevList", (("hydroEventId", "integer"),
+                              ("Number_of_UrQMDevents", "integer"))):
             for hydroEventId in range(1, self.hydroNev+1):
                 UrQMDNev = self.getNumberOfUrQMDEvents(hydroEventId)
-                self.db.insertIntoTable("UrQMD_NevList", (int(hydroEventId), int(UrQMDNev)))
+                self.db.insertIntoTable("UrQMD_NevList",
+                                        (int(hydroEventId), int(UrQMDNev)))
             self.db._dbCon.commit()  # commit changes
 
-    ################################################################################
+    ###########################################################################
     # functions to get number of events
-    ################################################################################ 
+    ########################################################################### 
     def getNumberOfHydroEvents(self):
         """
             return total number hydro events stored in the database
         """
-        Nev = self.db.executeSQLquery("select count(*) from (select distinct hydroEvent_id from particle_list)").fetchall()[0][0]
+        Nev = self.db.executeSQLquery(
+            "select count(*) from (select distinct hydroEvent_id "
+            "from particle_list)").fetchall()[0][0]
         return(Nev)
 
     def getNumberOfUrQMDEvents(self, hydroEventid):
         """
             return number of UrQMD events for the given hydro event
         """
-        Nev = self.db.executeSQLquery("select count(*) from (select distinct UrQMDEvent_id from particle_list where hydroEvent_id = %d)" % hydroEventid).fetchall()[0][0]
+        Nev = self.db.executeSQLquery(
+            "select count(*) from (select distinct UrQMDEvent_id from "
+            "particle_list where hydroEvent_id = %d)" 
+            % hydroEventid).fetchall()[0][0]
         return(Nev)
 
     def getNumberOftotalEvents(self):
         """
             return total number of events stored in the database
         """
-        hydroEventid = self.db.executeSQLquery("select distinct hydroEvent_id from particle_list").fetchall()
+        hydroEventid = self.db.executeSQLquery(
+            "select distinct hydroEvent_id from particle_list").fetchall()
         Nev = 0
         for iev in range(len(hydroEventid)):
             Nev += self.getNumberOfUrQMDEvents(hydroEventid[iev][0])
         return(Nev)
 
-    def getPidString(self, particleName = 'pion_p'):
+    def getPidString(self, particleName):
         if isinstance(particleName, list):
             pidList = []
             for aPart in particleName:
@@ -100,198 +126,220 @@ class particleReader(object):
         else:
             pid = self.pid_lookup[particleName]
             if pid == 1:    # all charged hadrons
-                pidString = self.getPidString(self.chargedHadronList)
+                pidString = self.getPidString(self.charged_hadron_list)
             else:
                 pidString = "pid = %d" % pid
         return(pidString)
     
-    ################################################################################
+    ###########################################################################
     # functions to collect particle spectra and yields
-    ################################################################################ 
-    def collectParticleSpectrum(self, particleName="pion_p", rapidity_range = [-0.5, 0.5], pseudorap_range = [-0.5, 0.5]):
+    ########################################################################### 
+    def get_particle_spectra_hist(self, hydro_id, urqmd_id, pid_string, 
+        rap_type = 'rapidity', rap_range = (-0.5, 0.5)):
         """
-            return event averaged particle spectrum (pT, dN/(dydpT), dN/(detadpT))
-            event loop over all the hydro + UrQMD events
+            return pT binned results of particle spectra as a numpy 2-D array
+            (pT, dN/dy dpT) or (pT, dN/deta dpT)
+            for one given event
         """
-        print("collect particle spectra of %s ..." % particleName)
-        pT_range = linspace(0, 3, 31)
-        pidString = self.getPidString(particleName)
-        pTavg = []
-        dNdydpT = []
-        dNdydpTerr = []
-        pTetaavg = []
-        dNdetadpT = []
-        dNdetadpTerr = []
-        Nev = self.totNev
-        for ipT in range(len(pT_range)-1):
-            pTlow = pT_range[ipT]
-            pThigh = pT_range[ipT+1]
-            dpT = pThigh - pTlow
-            #fetch dN/dydpT data
-            tempdata = self.db.executeSQLquery("select count(*), avg(pT) from particle_list where (%s) and (%g <= pT and pT < %g) and (%g <= rapidity and rapidity <= %g)" % (pidString, pTlow, pThigh, rapidity_range[0], rapidity_range[1])).fetchall()
-            deltaN = tempdata[0][0]
-            if tempdata[0][1] == None:
-                pTavg.append((pTlow + pThigh)/2.)
-            else:
-                pTavg.append(tempdata[0][1])
-            dNdydpT.append(deltaN/dpT/Nev)
-            dNdydpTerr.append(sqrt(deltaN/dpT/Nev)/sqrt(Nev))
-            #fetch dN/detadpT data
-            tempdata = self.db.executeSQLquery("select count(*), avg(pT) from particle_list where (%s) and (%g <= pT and pT < %g) and (%g <= pseudorapidity and pseudorapidity <= %g)" % (pidString, pTlow, pThigh, pseudorap_range[0], pseudorap_range[1])).fetchall()
-            if tempdata[0][1] == None:
-                pTetaavg.append((pTlow + pThigh)/2.)
-            else:
-                pTetaavg.append(tempdata[0][1])
-            deltaN = tempdata[0][0]
-            dNdetadpT.append(deltaN/dpT/Nev)
-            dNdetadpTerr.append(sqrt(deltaN/dpT/Nev)/sqrt(Nev))
+        #set pT bin boundaries
+        npT = 30
+        pT_boundaries = linspace(0, 3, npT + 1)
+        pT_avg = (pT_boundaries[0:-1] + pT_boundaries[1:])/2.
+        dNdydpT = zeros(npT)
 
-        return(array([pTavg, dNdydpT, dNdydpTerr, pTetaavg, dNdetadpT, dNdetadpTerr]).transpose())
-    
-    def collectBasicParticleSpectra(self):
-        """
-            collect particle spectra into database for commonly interested hadrons
-        """
-        BasicParticleList = ['pion_p', 'kaon_p', 'proton']
-        for aParticle in BasicParticleList:
-            pid = self.pid_lookup[aParticle]
-            dNdata = self.collectParticleSpectrum(aParticle)
-            for idx in range(len(dNdata[:,0])):
-                self.db.insertIntoTable("particleSpectra", (pid, dNdata[idx,0], dNdata[idx,1], dNdata[idx,2], dNdata[idx,3], dNdata[idx,4], dNdata[idx,5]))
-            self.db._dbCon.commit()  # commit changes
-     
-    def getParticleSpectrum(self, particleName = 'pion_p', pT_range = linspace(0,3,20), rapidity_range=[-0.5, 0.5]):
-        """
-            check particle spectrum is pre-collected or not. If not, collect particle spectrum 
-            into the database. It returns event averaged particle spectrum with pT_range and 
-            eta_range required by the users.
-        """
-        eps = 1e-15
-        pid = self.pid_lookup[particleName]
-        #check particle spectrum table is exist or not
-        if self.db.createTableIfNotExists("particleSpectra", (("pid","integer"), ("pT","real"), ("dNdydpT", "real"), ("dNdydpTerr", "real"), ("pTeta", "real"), ("dNdetadpT", "real"), ("dNdetadpTerr", "real") )):
-            self.collectBasicParticleSpectra()
-        dNdata = array(self.db.executeSQLquery("select pT, dNdydpT, dNdydpTerr, pTeta, dNdetadpT, dNdetadpTerr from particleSpectra where pid = %d " % pid).fetchall())
-        if(dNdata.size == 0):
-            dNdata = self.collectParticleSpectrum(particleName)
-            if (sum(abs(dNdata[:,1])) <  1e-15):
-                print "There is no record of particle: %s in the database" % particleName
-                return None
-            else:
-                for idx in range(len(dNdata[:,0])):
-                    self.db.insertIntoTable("particleSpectra", (pid, dNdata[idx,0], dNdata[idx,1], dNdata[idx,2], dNdata[idx,3], dNdata[idx,4], dNdata[idx,5]))
-                self.db._dbCon.commit()  # commit changes
+        #fetch data from the database
+        data = array(self.db.executeSQLquery(
+            "select pT from particle_list where hydroEvent_id = %d and "
+            "UrQMDEvent_id = %d and (%s) and (%g <= %s and %s <= %g)" 
+            % (hydro_id, urqmd_id, pid_string, rap_range[0], rap_type, 
+               rap_type, rap_range[1])).fetchall())
+        #bin data
+        if data.size != 0:
+            for ipT in range(len(pT_boundaries)-1):
+                pT_low = pT_boundaries[ipT]
+                pT_high = pT_boundaries[ipT+1]
+                temp_data = data[data[:,0] < pT_high]
+                if temp_data.size != 0:
+                    temp_data = temp_data[temp_data[:,0] >= pT_low]
+                    if temp_data.size != 0:
+                        pT_avg[ipT] = mean(temp_data)
+                        dNdydpT[ipT] = len(temp_data)
 
-        #interpolate results to desired pT range
-        dNdyinterp = exp(interp(pT_range, dNdata[:,0], log(dNdata[:,1]+eps)))
-        dNdyinterp_err = exp(interp(pT_range, dNdata[:,0], log(dNdata[:,2]+eps)))
-        dNdetainterp = exp(interp(pT_range, dNdata[:,3], log(dNdata[:,4]+eps)))
-        dNdetainterp_err = exp(interp(pT_range, dNdata[:,3], log(dNdata[:,5]+eps)))
-        results = array([pT_range, dNdyinterp, dNdyinterp_err, dNdetainterp, dNdetainterp_err])
-        return(transpose(results))
+        return array([pT_avg, dNdydpT]).transpose()
 
-    def collectParticleYield(self, particleName = 'pion_p'):
+    def collect_particle_spectra(
+        self, particle_name="pion_p", rap_type='rapidity'):
         """
-            return event averaged particle yield (y or eta, dN/dy, dN/(deta))
-            event loop over all the hydro + UrQMD events
+            collect histogram of particle pT-spectra
+            (pT, dN/(dydpT) or (pT, dN/(detadpT))
+            for each event and store them into analyzed database
         """
-        print("collect particle yield of %s" % particleName)
-        eta_range = linspace(-3, 3, 61)
-        pidString = self.getPidString(particleName)
-        etaavg = []
-        dNdy = []
-        dNdyerr = []
-        dNdeta = []
-        dNdetaerr = []
-        Nev = self.totNev
-        for ieta in range(len(eta_range)-1):
-            etalow = eta_range[ieta]
-            etahigh = eta_range[ieta+1]
-            deta = etahigh - etalow
-            #fetch dN/dy data
-            whereClause = "(%s)" % pidString
-            whereClause += " and (%g<=rapidity and rapidity<=%g)" % (etalow, etahigh)
-            tempdata = self.db.selectFromTable("particle_list", "count(*), avg(rapidity)", whereClause=whereClause)
-            deltaN = tempdata[0][0]
-            if tempdata[0][1] == None:
-                etaavg.append((etalow + etahigh)/2.)
-            else:
-                etaavg.append(tempdata[0][1])
-            dNdy.append(deltaN/deta/Nev)
-            dNdyerr.append(sqrt(deltaN/deta/Nev)/sqrt(Nev))
-            #fetch dN/deta data
-            whereClause = "(%s)" % pidString
-            whereClause += " and (%g<=pseudorapidity and pseudorapidity<=%g)" % (etalow, etahigh)
-            tempdata = self.db.selectFromTable("particle_list", "count(*), avg(pseudorapidity)", whereClause=whereClause)
-            deltaN = tempdata[0][0]
-            dNdeta.append(deltaN/deta/Nev)
-            dNdetaerr.append(sqrt(deltaN/deta/Nev)/sqrt(Nev))
+        # get pid string
+        pid = self.pid_lookup[particle_name]
+        pidString = self.getPidString(particle_name)
+        if rap_type == 'rapidity':
+            analyzed_table_name = 'particle_pT_spectra'
+        elif rap_type == 'pseudorapidity':
+            analyzed_table_name = 'particle_pT_spectra_eta'
+        else:
+            raise TypeError("ParticleReader.collect_particle_spectra: "
+                            "invalid input rap_type : %s" % rap_type)
 
-        return(array([etaavg, dNdy, dNdyerr, dNdeta, dNdetaerr]).transpose())
-    
-    def collectBasicParticleYield(self):
-        """
-            collect particle yield into database for commonly interested hadrons
-        """
-        BasicParticleList = ['pion_p', 'kaon_p', 'proton']
-        for aParticle in BasicParticleList:
-            pid = self.pid_lookup[aParticle]
-            dNdata = self.collectParticleYield(aParticle)
-            for idx in range(len(dNdata[:,0])):
-                self.db.insertIntoTable("particleYield", (pid, dNdata[idx,0], dNdata[idx,1], dNdata[idx,2], dNdata[idx,3], dNdata[idx,4]))
-            self.db._dbCon.commit()  # commit changes
-
-    def getParticleYieldvsrap(self, particleName = 'pion_p', rap_range = linspace(-2.5, 2.5, 51)):
-        """
-            check particle yield is pre-collected or not. If not, collect particle yield
-            into the database. It returns event averaged particle yield with rapidity_range
-            or pseudorap_range required by the users.
-        """
-        eps = 1e-15
-        pid = self.pid_lookup[particleName]
-        #check particle spectrum table is exist or not
-        if self.db.createTableIfNotExists("particleYield", (("pid","integer"), ("eta","real"), ("dNdy", "real"), ("dNdyerr", "real"), ("dNdeta", "real"), ("dNdetaerr", "real") )):
-            self.collectBasicParticleYield()
-        dNdata = array(self.db.executeSQLquery("select eta, dNdy, dNdyerr, dNdeta, dNdetaerr from particleYield where pid = %d " % pid).fetchall())
-        if(dNdata.size == 0):
-            dNdata = self.collectParticleYield(particleName)
-            if (sum(abs(dNdata[:,1])) <  1e-15):
-                print "There is no record of particle: %s in the database" % particleName
-                return None
-            else:
-                for idx in range(len(dNdata[:,0])):
-                    self.db.insertIntoTable("particleYield", (pid, dNdata[idx,0], dNdata[idx,1], dNdata[idx,2], dNdata[idx,3], dNdata[idx,4]))
-                self.db._dbCon.commit()  # commit changes
-
-        #interpolate results to desired pT range
-        dNdyinterp = interp(rap_range, dNdata[:,0], dNdata[:,1])
-        dNdyinterp_err = interp(rap_range, dNdata[:,0], dNdata[:,2])
-        dNdetainterp = interp(rap_range, dNdata[:,0], dNdata[:,3])
-        dNdetainterp_err = interp(rap_range, dNdata[:,0], dNdata[:,4])
-        results = array([rap_range, dNdyinterp, dNdyinterp_err, dNdetainterp, dNdetainterp_err])
-        return(transpose(results))
-
-    def getParticleYield(self, particleName = 'pion_p', rapRange = [-0.5, 0.5], pseudorapRange = [-0.5, 0.5]):
-        """
-            return the particle yield of particle species "particleName" within given 
-            rapidity or pseudorapidity range by users
-        """
-        npoint = 50
-        Nev = self.totNev
-       
-        dy = (rapRange[1] - rapRange[0])/npoint
-        rapArray = linspace(rapRange[0], rapRange[1]-dy, npoint) + dy/2.
-        dNdydata = self.getParticleYieldvsrap(particleName, rap_range = rapArray)
-        dNdy = sum(dNdydata[:,1])*dy
-        dNdyerr = sqrt(dNdy)/sqrt(Nev)
+        # check whether the data are already collected
+        collected_flag = True
+        if self.analyzed_db.createTableIfNotExists(analyzed_table_name,
+            (('hydro_event_id', 'integer'), ('urqmd_event_id', 'integer'),
+             ('pid', 'integer'), ('pT', 'real'), ('N', 'integer'))):
+            collected_flag = False
+        else:
+            try_data = array(self.analyzed_db.executeSQLquery(
+                "select pT, N from %s where "
+                "hydro_event_id = %d and urqmd_event_id = %d and "
+                "pid = %d" % (analyzed_table_name, 1, 1, pid)).fetchall())
+            if try_data.size == 0: collected_flag = False
         
-        deta = (pseudorapRange[1] - pseudorapRange[0])/npoint
-        pseudorapArray = linspace(pseudorapRange[0], pseudorapRange[1] - deta, npoint) + deta/2.
-        dNdetadata = self.getParticleYieldvsrap(particleName, rap_range = pseudorapArray)
-        dNdeta = sum(dNdetadata[:,3])*deta
-        dNdetaerr = sqrt(dNdeta)/sqrt(Nev)
+        # check whether user wants to update the analyzed data
+        if collected_flag:
+            print("particle spectra of %s has already been collected!" 
+                  % particle_name)
+            inputval = raw_input(
+                "Do you want to delete the existing one and collect again?")
+            if inputval.lower() == 'y' or inputval.lower() == 'yes':
+                self.analyzed_db.executeSQLquery("delete from %s "
+                    "where pid = %d" % (analyzed_table_name, pid))
+                self.analyzed_db._dbCon.commit() # commit changes
+                collected_flag = False
 
-        return(dNdy, dNdyerr, dNdeta, dNdetaerr)
+        # collect data loop over all the events
+        if not collected_flag:
+            print("collect particle spectra of %s ..." % particle_name)
+            for hydroId in range(1, self.hydroNev+1):
+                urqmd_nev = self.db.executeSQLquery(
+                    "select Number_of_UrQMDevents from UrQMD_NevList where "
+                    "hydroEventId = %d " % hydroId).fetchall()[0][0]
+                for urqmdId in range(1, urqmd_nev+1):
+                    hist = self.get_particle_spectra_hist(hydroId, urqmdId, 
+                                                          pidString, rap_type)
+                    for ipT in range(len(hist[:,0])):
+                        self.analyzed_db.insertIntoTable(
+                            analyzed_table_name, (hydroId, urqmdId, pid,
+                                                  hist[ipT,0], int(hist[ipT,1])))
+        self.analyzed_db._dbCon.commit() # commit changes
+    
+    def collect_basic_particle_spectra(self):
+        """
+            collect particle spectra into database for commonly interested 
+            hadrons
+        """
+        basic_particle_list = ['pion_p', 'kaon_p', 'proton']
+        for aParticle in basic_particle_list:
+            self.collect_particle_spectra(aParticle, rap_type='rapidity')
+            self.collect_particle_spectra(aParticle, rap_type='pseudorapidity')
+     
+    def get_particle_yield_vs_rap_hist(self, hydro_id, urqmd_id, pid_string, 
+                                  rap_type = 'rapidity'):
+        """
+            return rap binned results of particle yield as a numpy 2-D array
+            (y, dN/dy) or (eta, dN/deta) for one given event in the database
+        """
+        #set rap bin boundaries
+        nrap = 20
+        rap_min = -1.0
+        rap_max = 1.0
+        rap_boundaries = linspace(rap_min, rap_max, nrap + 1)
+        rap_avg = (rap_boundaries[0:-1] + rap_boundaries[1:])/2.
+        dNdy = zeros(nrap)
+
+        #fetch data from the database
+        data = array(self.db.executeSQLquery(
+            "select (%s) from particle_list where hydroEvent_id = %d and "
+            "UrQMDEvent_id = %d and (%s) and (%g <= %s and %s <= %g)" 
+            % (rap_type, hydro_id, urqmd_id, pid_string, rap_min, rap_type, 
+               rap_type, rap_max)).fetchall())
+
+        #bin data
+        if data.size != 0:
+            for irap in range(len(rap_boundaries)-1):
+                rap_low = rap_boundaries[irap]
+                rap_high = rap_boundaries[irap+1]
+                temp_data = data[data[:,0] < rap_high]
+                if temp_data.size != 0:
+                    temp_data = temp_data[temp_data[:,0] >= rap_low]
+                    if temp_data.size != 0:
+                        rap_avg[irap] = mean(temp_data)
+                        dNdy[irap] = len(temp_data)
+        
+        return array([rap_avg, dNdy]).transpose()
+
+    def collect_particle_yield_vs_rap(
+        self, particle_name='pion_p', rap_type='rapidity'):
+        """
+            collect particle yield as a function of rapidity
+            (y, dN/dy) or (eta, dN/deta)
+        """
+        # get pid string
+        pid = self.pid_lookup[particle_name]
+        pidString = self.getPidString(particle_name)
+        if rap_type == 'rapidity':
+            analyzed_table_name = 'particle_yield_vs_rap'
+        elif rap_type == 'pseudorapidity':
+            analyzed_table_name = 'particle_yield_vs_psedurap'
+        else:
+            raise TypeError("ParticleReader.collect_particle_yield_vs_rap: "
+                            "invalid input rap_type : %s" % rap_type)
+        # check whether the data are already collected
+        collected_flag = True
+        if self.analyzed_db.createTableIfNotExists(analyzed_table_name,
+            (('hydro_event_id', 'integer'), ('urqmd_event_id', 'integer'),
+             ('pid', 'integer'), ('rap', 'real'), ('N', 'integer'))):
+            collected_flag = False
+        else:
+            try_data = array(self.analyzed_db.executeSQLquery(
+                "select rap, N from %s where "
+                "hydro_event_id = %d and urqmd_event_id = %d and "
+                "pid = %d" % (analyzed_table_name, 1, 1, pid)).fetchall())
+            if try_data.size == 0: collected_flag = False
+        
+        # check whether user wants to update the analyzed data
+        if collected_flag:
+            print("%s dependence of particle yield for %s has already been "
+                  "collected!" % (rap_type, particle_name))
+            inputval = raw_input(
+                "Do you want to delete the existing one and collect again?")
+            if inputval.lower() == 'y' or inputval.lower() == 'yes':
+                self.analyzed_db.executeSQLquery("delete from %s "
+                    "where pid = %d" % (analyzed_table_name, pid))
+                self.analyzed_db._dbCon.commit() # commit changes
+                collected_flag = False
+
+        # collect data loop over all the events
+        if not collected_flag:
+            print("collect %s dependence of particle yield for %s ..." 
+                  % (rap_type, particle_name))
+            for hydroId in range(1, self.hydroNev+1):
+                urqmd_nev = self.db.executeSQLquery(
+                    "select Number_of_UrQMDevents from UrQMD_NevList where "
+                    "hydroEventId = %d " % hydroId).fetchall()[0][0]
+                for urqmdId in range(1, urqmd_nev+1):
+                    hist = self.get_particle_yield_vs_rap_hist(
+                        hydroId, urqmdId, pidString, rap_type)
+                    for irap in range(len(hist[:,0])):
+                        self.analyzed_db.insertIntoTable(
+                            analyzed_table_name, (hydroId, urqmdId, pid, 
+                            hist[irap,0], int(hist[irap,1]))
+                        )
+        self.analyzed_db._dbCon.commit() # commit changes
+
+    def collect_basic_particle_yield(self):
+        """
+            collect particle yield into database for commonly interested 
+            hadrons
+        """
+        basic_particle_list = ['pion_p', 'kaon_p', 'proton']
+        for aParticle in basic_particle_list:
+            self.collect_particle_yield_vs_rap(aParticle, rap_type='rapidity')
+            self.collect_particle_yield_vs_rap(aParticle, 
+                                               rap_type='pseudorapidity')
 
     
     ################################################################################
@@ -1380,13 +1428,17 @@ class particleReader(object):
 
 def printHelpMessageandQuit():
     print "Usage : "
-    print "particleReader.py databaseName"
+    print "ParticleReader.py databaseName"
     exit(0)
 
 if __name__ == "__main__":
     if len(argv) < 2:
         printHelpMessageandQuit()
-    test = particleReader(str(argv[1]))
+    test = ParticleReader(str(argv[1]))
+    test.collect_particle_spectra("charged", rap_type = 'pseudorapidity')
+    test.collect_particle_yield_vs_rap("charged", rap_type = 'pseudorapidity')
+    #test.collect_basic_particle_spectra()
+    #test.collect_basic_particle_yield()
     #for aPart in ['pion_p', 'kaon_p', 'proton']:
     #    print(test.getParticleYieldvsSpatialVariable(particleName = aPart, SVtype = 'tau', SV_range = linspace(0.0, 15.0, 76)))
     #    print(test.getParticleYieldvsSpatialVariable(particleName = aPart, SVtype = 'x', SV_range = linspace(-13.0, 13.0, 101)))
@@ -1399,15 +1451,15 @@ if __name__ == "__main__":
     #print(test.getParticleYield('charged'))
     #test.collectGlobalQnvectorforeachEvent()
     #test.collectGlobalResolutionFactor()
-    print(test.getdiffEventplaneflow(particleName = 'pion_p'))
-    print(test.getdiffEventplaneflow(particleName = 'kaon_p'))
-    print(test.getdiffEventplaneflow(particleName = 'proton'))
-    print(test.getdiffScalarProductflow(particleName = 'pion_p'))
-    print(test.getdiffScalarProductflow(particleName = 'kaon_p'))
-    print(test.getdiffScalarProductflow(particleName = 'proton'))
-    print(test.getdiffTwoparticlecumulantflow(particleName = 'pion_p'))
-    print(test.getdiffTwoparticlecumulantflow(particleName = 'kaon_p'))
-    print(test.getdiffTwoparticlecumulantflow(particleName = 'proton'))
+    #print(test.getdiffEventplaneflow(particleName = 'pion_p'))
+    #print(test.getdiffEventplaneflow(particleName = 'kaon_p'))
+    #print(test.getdiffEventplaneflow(particleName = 'proton'))
+    #print(test.getdiffScalarProductflow(particleName = 'pion_p'))
+    #print(test.getdiffScalarProductflow(particleName = 'kaon_p'))
+    #print(test.getdiffScalarProductflow(particleName = 'proton'))
+    #print(test.getdiffTwoparticlecumulantflow(particleName = 'pion_p'))
+    #print(test.getdiffTwoparticlecumulantflow(particleName = 'kaon_p'))
+    #print(test.getdiffTwoparticlecumulantflow(particleName = 'proton'))
     #test.collectEventplaneflow('charged', 2)
     #test.collectTwoparticleCorrelation()
 
