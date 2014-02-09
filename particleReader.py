@@ -37,12 +37,14 @@ class ParticleReader(object):
             raise TypeError(
                 "ParticleReader.__init__: the input database must be "
                 "a string or a SqliteDB database.")
+
         if isinstance(analyzed_database, str):
             self.analyzed_db = SqliteDB(analyzed_database)
         else:
             raise ValueError(
                 "ParticleReader.__init__: output database %s has to be a "
                 "string")
+
         # setup lookup tables
         self.pid_lookup = dict(self.db.selectFromTable("pid_lookup"))
 
@@ -83,6 +85,14 @@ class ParticleReader(object):
                 self.db.insertIntoTable("UrQMD_NevList",
                                         (int(hydroEventId), int(UrQMDNev)))
             self.db._dbCon.commit()  # commit changes
+        
+        # copy information tables to analyzed_db
+        for aTable in ['pid_lookup', 'pid_Mass', 'number_of_events', 
+                       'UrQMD_NevList']:
+            if self.analyzed_db.createTableIfNotExists(
+                    aTable, self.db.getTableInfo(aTable)):
+                self.analyzed_db.insertIntoTable(
+                    aTable, self.db.selectFromTable(aTable))
 
     ###########################################################################
     # functions to get number of events
