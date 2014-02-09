@@ -464,6 +464,8 @@ class ParticleReader(object):
             Qn_data[iorder,0] = iorder + 1
             for ipT in range(npT):
                 Qn_pTdata[iorder*npT + ipT, 0] = iorder + 1
+                Qn_pTdata[iorder*npT:(iorder+1)*npT, 1] = (
+                    (pT_boundaries[0:npT] + pT_boundaries[1:npT+1])/2.)
         
         print("processing event: (%d, %d) " % (hydro_id, urqmd_id))
         particleList = array(self.db.executeSQLquery(
@@ -486,9 +488,9 @@ class ParticleReader(object):
         idx = []
         idxA = []
         idxB = []
-        idx_pT = [[]]*npT
-        idxA_pT = [[]]*npT
-        idxB_pT = [[]]*npT
+        idx_pT = [[] for _ in range(npT)]
+        idxA_pT = [[] for _ in range(npT)]
+        idxB_pT = [[] for _ in range(npT)]
         for ipart in range(len(pT)):
             pTpos = int((pT[ipart] - pT_boundaries[0])/dpT)
             if rap[ipart] <= 0.5 and rap[ipart] >= -0.5:
@@ -497,7 +499,7 @@ class ParticleReader(object):
             if rap[ipart] <= 2.0 and rap[ipart] > 0.5:
                 idxA.append(ipart)
                 if pTpos < npT: idxA_pT[pTpos].append(ipart)
-            if rap[ipart] < -0.5 and rap[ipart] >= 2.0:
+            if rap[ipart] < -0.5 and rap[ipart] >= -2.0:
                 idxB.append(ipart)
                 if pTpos < npT: idxB_pT[pTpos].append(ipart)
 
@@ -513,25 +515,22 @@ class ParticleReader(object):
             Qn_data[iorder-1,3] = arctan2(temp_Qn_y, temp_Qn_x)/iorder
             # QnA vectors at forward rapidity
             temp_Qn_x = sum(weight[idxA[0:Nparticle_sub]]
-                            *cos(iorder*phi[idxA[0:Nparticle_sub+1]]))
+                            *cos(iorder*phi[idxA[0:Nparticle_sub]]))
             temp_Qn_y = sum(weight[idxA[0:Nparticle_sub]]
-                            *sin(iorder*phi[idxA[0:Nparticle_sub+1]]))
+                            *sin(iorder*phi[idxA[0:Nparticle_sub]]))
             Qn_data[iorder-1,4] = Nparticle_sub
             Qn_data[iorder-1,5] = sqrt(temp_Qn_x**2 + temp_Qn_y**2)
             Qn_data[iorder-1,6] = arctan2(temp_Qn_y, temp_Qn_x)/iorder
             # QnB vector at backward rapidity
             temp_Qn_x = sum(weight[idxB[0:Nparticle_sub]]
-                            *cos(iorder*phi[idxB[0:Nparticle_sub+1]]))
+                            *cos(iorder*phi[idxB[0:Nparticle_sub]]))
             temp_Qn_y = sum(weight[idxB[0:Nparticle_sub]]
-                            *sin(iorder*phi[idxB[0:Nparticle_sub+1]]))
+                            *sin(iorder*phi[idxB[0:Nparticle_sub]]))
             Qn_data[iorder-1,7] = sqrt(temp_Qn_x**2 + temp_Qn_y**2)
             Qn_data[iorder-1,8] = arctan2(temp_Qn_y, temp_Qn_x)/iorder
             for ipT in range(npT):
                 data_idx = (iorder-1)*npT + ipT
-                if idx_pT[ipT] == []:
-                    Qn_pTdata[data_idx,1] = (
-                        (pT_boundaries[ipT] + pT_boundaries[ipT+1])/2.)
-                    break
+                if idx_pT[ipT] == []: continue
                 Nparticle_pT = len(idx_pT[ipT])
                 Nparticle_sub_pT = min(len(idxA_pT[ipT]), len(idxB_pT[ipT]))
                 Qn_pTdata[data_idx,1] = mean(pT[idx_pT[ipT]])
