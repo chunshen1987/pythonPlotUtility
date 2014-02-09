@@ -142,7 +142,7 @@ class AnalyzedDataReader(object):
             This function performs event average for particle pT-spectra
             from the database and interpolates to the desired pT values
             specified by the users.
-            It returns (pT, dN/(dydpT))
+            It returns (pT, dN/(dydpT), dN/(dydpT)_err)
         """
         eps = 1e-15
         pid = self.pid_lookup[particle_name]
@@ -173,6 +173,8 @@ class AnalyzedDataReader(object):
                 dN_avg[:,0] += temp_data[:,0]*temp_data[:,1]
                 dN_avg[:,1] += temp_data[:,1]
                 dN_avg[:,2] += temp_data[:,1]**2
+        
+        # calculate mean pT, <dN/dydpT>, and <dN/dydpT>_err 
         dN_avg[:,0] = dN_avg[:,0]/dN_avg[:,1]
         dN_avg[:,1] = dN_avg[:,1]/self.tot_nev
         dN_avg[:,2] = (sqrt(dN_avg[:,2]/self.tot_nev - dN_avg[:,1]**2)
@@ -185,35 +187,55 @@ class AnalyzedDataReader(object):
         results = array([pT_range, dNdyinterp, dNdyinterp_err])
         return transpose(results)
 
-#    def getParticleYieldvsrap(self, particleName = 'pion_p', rap_range = linspace(-2.5, 2.5, 51)):
-#        """
-#            check particle yield is pre-collected or not. If not, collect particle yield
-#            into the database. It returns event averaged particle yield with rapidity_range
-#            or pseudorap_range required by the users.
-#        """
-#        eps = 1e-15
-#        pid = self.pid_lookup[particleName]
-#        #check particle spectrum table is exist or not
-#        if self.db.createTableIfNotExists("particleYield", (("pid","integer"), ("eta","real"), ("dNdy", "real"), ("dNdyerr", "real"), ("dNdeta", "real"), ("dNdetaerr", "real") )):
-#            self.collectBasicParticleYield()
-#        dNdata = array(self.db.executeSQLquery("select eta, dNdy, dNdyerr, dNdeta, dNdetaerr from particleYield where pid = %d " % pid).fetchall())
-#        if(dNdata.size == 0):
-#            dNdata = self.collectParticleYield(particleName)
-#            if (sum(abs(dNdata[:,1])) <  1e-15):
-#                print "There is no record of particle: %s in the database" % particleName
-#                return None
-#            else:
-#                for idx in range(len(dNdata[:,0])):
-#                    self.db.insertIntoTable("particleYield", (pid, dNdata[idx,0], dNdata[idx,1], dNdata[idx,2], dNdata[idx,3], dNdata[idx,4]))
-#                self.db._dbCon.commit()  # commit changes
-#
-#        #interpolate results to desired pT range
-#        dNdyinterp = interp(rap_range, dNdata[:,0], dNdata[:,1])
-#        dNdyinterp_err = interp(rap_range, dNdata[:,0], dNdata[:,2])
-#        dNdetainterp = interp(rap_range, dNdata[:,0], dNdata[:,3])
-#        dNdetainterp_err = interp(rap_range, dNdata[:,0], dNdata[:,4])
-#        results = array([rap_range, dNdyinterp, dNdyinterp_err, dNdetainterp, dNdetainterp_err])
-#        return(transpose(results))
+    def get_particle_yield_vs_rap(self, particle_name, rap_type = 'rapidity', 
+                                  rap_range = linspace(-2.0, 2.0, 41)):
+        """
+            It returns event averaged particle yield vs rapidity
+            or pseudorapidity. The range is specified by the user.
+            It returns (rap, dN/(drap), dN/(drap)_err)
+        """
+        eps = 1e-15
+        pid = self.pid_lookup[particle_name]
+        if rap_type == 'rapidity':
+            analyzed_table_name = 'particle_yield_vs_rap'
+        elif rap_type == 'pseudorapidity':
+            analyzed_table_name = 'particle_yield_vs_psedurap'
+        else:
+            raise ValueError("unrecognized rap_type: %s" % rap_type)
+        
+        nrap = len(self.db.executeSQLquery(
+            "select rap from %s where hydro_event_id = %d and "
+            "urqmd_event_id = %d and pid = %d" 
+            % (analyzed_table_name, 1, 1, pid)).fetchall())
+        
+        dN_avg = zeros([nrap, 3])
+        
+        #fetch data
+        for hydroId in range(1, self.hydro_nev+1):
+            urqmd_nev = self.db.executeSQLquery(
+                "select Number_of_UrQMDevents from UrQMD_NevList where "
+                "hydroEventId = %d " % hydroId).fetchall()[0][0]
+            for urqmdId in range(1, urqmd_nev+1):
+                temp_data = array(self.db.executeSQLquery(
+                    "select rap, dN_drap from %s where hydro_event_id = %d "
+                    "and urqmd_event_id = %d and pid = %d" 
+                    % (analyzed_table_name, hydroId, urqmdId, pid)).fetchall())
+                dN_avg[:,0] += temp_data[:,0]*temp_data[:,1]
+                dN_avg[:,1] += temp_data[:,1]
+                dN_avg[:,2] += temp_data[:,1]**2
+
+        # calculate mean rap, <dN/drap>, and <dN/drap>_err 
+        dN_avg[:,0] = dN_avg[:,0]/dN_avg[:,1]
+        dN_avg[:,1] = dN_avg[:,1]/self.tot_nev
+        dN_avg[:,2] = (sqrt(dN_avg[:,2]/self.tot_nev - dN_avg[:,1]**2)
+                       /sqrt(self.tot_nev))
+        
+        #interpolate results to desired rap range
+        dNdyinterp = interp(rap_range, dN_avg[:,0], dN_avg[:,1])
+        dNdyinterp_err = interp(rap_range, dN_avg[:,0], dN_avg[:,2])
+        results = array([rap_range, dNdyinterp, dNdyinterp_err])
+        return transpose(results)
+
 #
 #
 #    def getParticleYield(self, particleName = 'pion_p', rapRange = [-0.5, 0.5], pseudorapRange = [-0.5, 0.5]):
@@ -1202,7 +1224,8 @@ if __name__ == "__main__":
     if len(argv) < 2:
         printHelpMessageandQuit()
     test = AnalyzedDataReader(str(argv[1]))
-    print(test.get_particle_spectra('pion_p', pT_range=linspace(0.1, 2.5, 20)))
+    #print(test.get_particle_spectra('pion_p', pT_range=linspace(0.1, 2.5, 20), rap_type = 'pseudorapidity'))
+    #print(test.get_particle_yield_vs_rap('pion_p', rap_type = 'rapidity', rap_range=linspace(-1.0, 1.0, 15)))
     #print(test.getAvgdiffvnflow(particleName = "charged", psiR = 0., order = 2, pT_range = linspace(0.0, 2.0, 20)))
     #print(test.getAvgintevnflowvsrap(particleName = "charged", psiR = 0., order = 2, rap_range = linspace(-2.0, 2.0, 20)))
     #print(test.getParticleintevn('charged'))
