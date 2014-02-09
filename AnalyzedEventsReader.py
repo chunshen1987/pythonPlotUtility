@@ -194,7 +194,6 @@ class AnalyzedDataReader(object):
             or pseudorapidity. The range is specified by the user.
             It returns (rap, dN/(drap), dN/(drap)_err)
         """
-        eps = 1e-15
         pid = self.pid_lookup[particle_name]
         if rap_type == 'rapidity':
             analyzed_table_name = 'particle_yield_vs_rap'
@@ -236,29 +235,61 @@ class AnalyzedDataReader(object):
         results = array([rap_range, dNdyinterp, dNdyinterp_err])
         return transpose(results)
 
-#
-#
-#    def getParticleYield(self, particleName = 'pion_p', rapRange = [-0.5, 0.5], pseudorapRange = [-0.5, 0.5]):
-#        """
-#            return the particle yield of particle species "particleName" within given 
-#            rapidity or pseudorapidity range by users
-#        """
-#        npoint = 50
-#        Nev = self.totNev
-#       
-#        dy = (rapRange[1] - rapRange[0])/npoint
-#        rapArray = linspace(rapRange[0], rapRange[1]-dy, npoint) + dy/2.
-#        dNdydata = self.getParticleYieldvsrap(particleName, rap_range = rapArray)
-#        dNdy = sum(dNdydata[:,1])*dy
-#        dNdyerr = sqrt(dNdy)/sqrt(Nev)
-#        
-#        deta = (pseudorapRange[1] - pseudorapRange[0])/npoint
-#        pseudorapArray = linspace(pseudorapRange[0], pseudorapRange[1] - deta, npoint) + deta/2.
-#        dNdetadata = self.getParticleYieldvsrap(particleName, rap_range = pseudorapArray)
-#        dNdeta = sum(dNdetadata[:,3])*deta
-#        dNdetaerr = sqrt(dNdeta)/sqrt(Nev)
-#
-#        return(dNdy, dNdyerr, dNdeta, dNdetaerr)
+    def get_particle_yield(self, particle_name, rap_type = 'rapidity', 
+                           rap_range = (-0.5, 0.5)):
+        """
+            return the integrated particle yield N of particle species 
+            "particle_name" within the given rapidity or pseudorapidity 
+            range by users
+        """
+        pid = self.pid_lookup[particle_name]
+        if rap_type == 'rapidity':
+            analyzed_table_name = 'particle_yield_vs_rap'
+        elif rap_type == 'pseudorapidity':
+            analyzed_table_name = 'particle_yield_vs_psedurap'
+        else:
+            raise ValueError("unrecognized rap_type: %s" % rap_type)
+        
+        nrap = len(self.db.executeSQLquery(
+            "select rap from %s where hydro_event_id = %d and "
+            "urqmd_event_id = %d and pid = %d" 
+            % (analyzed_table_name, 1, 1, pid)).fetchall())
+        drap = 0.1
+        
+        mean_rap = 0.0
+        particle_yield = 0.0
+        particle_yield_err = 0.0
+        
+        #fetch data
+        for hydroId in range(1, self.hydro_nev+1):
+            urqmd_nev = self.db.executeSQLquery(
+                "select Number_of_UrQMDevents from UrQMD_NevList where "
+                "hydroEventId = %d " % hydroId).fetchall()[0][0]
+            for urqmdId in range(1, urqmd_nev+1):
+                temp_data = array(self.db.executeSQLquery(
+                    "select rap, dN_drap from %s where hydro_event_id = %d "
+                    "and urqmd_event_id = %d and pid = %d" 
+                    % (analyzed_table_name, hydroId, urqmdId, pid)).fetchall())
+                cut_data = temp_data[temp_data[:,0] > rap_range[0],:]
+                cut_data2 = cut_data[cut_data[:,0] < rap_range[1],:]
+                mean_rap += sum(cut_data2[:,0]*cut_data2[:,1])
+                particle_yield += sum(cut_data2[:,1])
+                particle_yield_err += sum(cut_data2[:,1])**2
+
+        # calculate mean rap, <dN>, and <dN>_err 
+        mean_rap = mean_rap/particle_yield
+        particle_yield = particle_yield/self.tot_nev*drap
+        particle_yield_err = (
+            sqrt(particle_yield_err/self.tot_nev - particle_yield**2)
+            /sqrt(self.tot_nev))*drap
+        return(mean_rap, particle_yield, particle_yield_err)
+    ###########################################################################
+    # functions to collect particle emission function
+    ########################################################################### 
+
+    ###########################################################################
+    # functions to collect particle anisotropic flows
+    ########################################################################### 
 #
 #    def collectAvgdiffvnflow(self, particleName = 'pion_p', psiR = 0., rapidity_range = [-0.5, 0.5], pseudorap_range = [-0.5, 0.5]):
 #        """
@@ -1226,6 +1257,7 @@ if __name__ == "__main__":
     test = AnalyzedDataReader(str(argv[1]))
     #print(test.get_particle_spectra('pion_p', pT_range=linspace(0.1, 2.5, 20), rap_type = 'pseudorapidity'))
     #print(test.get_particle_yield_vs_rap('pion_p', rap_type = 'rapidity', rap_range=linspace(-1.0, 1.0, 15)))
+    print(test.get_particle_yield('pion_p', rap_type = 'rapidity', rap_range=(-0.5, 0.5)))
     #print(test.getAvgdiffvnflow(particleName = "charged", psiR = 0., order = 2, pT_range = linspace(0.0, 2.0, 20)))
     #print(test.getAvgintevnflowvsrap(particleName = "charged", psiR = 0., order = 2, rap_range = linspace(-2.0, 2.0, 20)))
     #print(test.getParticleintevn('charged'))
