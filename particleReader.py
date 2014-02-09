@@ -144,6 +144,7 @@ class ParticleReader(object):
         #set pT bin boundaries
         npT = 30
         pT_boundaries = linspace(0, 3, npT + 1)
+        dpT = pT_boundaries[1] - pT_boundaries[0]
         pT_avg = (pT_boundaries[0:-1] + pT_boundaries[1:])/2.
         dNdydpT = zeros(npT)
 
@@ -163,7 +164,7 @@ class ParticleReader(object):
                     temp_data = temp_data[temp_data[:,0] >= pT_low]
                     if temp_data.size != 0:
                         pT_avg[ipT] = mean(temp_data)
-                        dNdydpT[ipT] = len(temp_data)
+                        dNdydpT[ipT] = len(temp_data)/dpT
 
         return array([pT_avg, dNdydpT]).transpose()
 
@@ -189,11 +190,11 @@ class ParticleReader(object):
         collected_flag = True
         if self.analyzed_db.createTableIfNotExists(analyzed_table_name,
             (('hydro_event_id', 'integer'), ('urqmd_event_id', 'integer'),
-             ('pid', 'integer'), ('pT', 'real'), ('N', 'integer'))):
+             ('pid', 'integer'), ('pT', 'real'), ('dN_dydpT', 'real'))):
             collected_flag = False
         else:
             try_data = array(self.analyzed_db.executeSQLquery(
-                "select pT, N from %s where "
+                "select pT, dN_dydpT from %s where "
                 "hydro_event_id = %d and urqmd_event_id = %d and "
                 "pid = %d" % (analyzed_table_name, 1, 1, pid)).fetchall())
             if try_data.size == 0: collected_flag = False
@@ -221,9 +222,8 @@ class ParticleReader(object):
                     hist = self.get_particle_spectra_hist(hydroId, urqmdId, 
                                                           pidString, rap_type)
                     for ipT in range(len(hist[:,0])):
-                        self.analyzed_db.insertIntoTable(
-                            analyzed_table_name, (hydroId, urqmdId, pid,
-                                                  hist[ipT,0], int(hist[ipT,1])))
+                        self.analyzed_db.insertIntoTable(analyzed_table_name, 
+                            (hydroId, urqmdId, pid, hist[ipT,0], hist[ipT,1]))
         self.analyzed_db._dbCon.commit() # commit changes
     
     def collect_basic_particle_spectra(self):
@@ -247,6 +247,7 @@ class ParticleReader(object):
         rap_min = -1.0
         rap_max = 1.0
         rap_boundaries = linspace(rap_min, rap_max, nrap + 1)
+        drap = rap_boundaries[1] - rap_boundaries[0]
         rap_avg = (rap_boundaries[0:-1] + rap_boundaries[1:])/2.
         dNdy = zeros(nrap)
 
@@ -267,7 +268,7 @@ class ParticleReader(object):
                     temp_data = temp_data[temp_data[:,0] >= rap_low]
                     if temp_data.size != 0:
                         rap_avg[irap] = mean(temp_data)
-                        dNdy[irap] = len(temp_data)
+                        dNdy[irap] = len(temp_data)/drap
         
         return array([rap_avg, dNdy]).transpose()
 
@@ -291,11 +292,11 @@ class ParticleReader(object):
         collected_flag = True
         if self.analyzed_db.createTableIfNotExists(analyzed_table_name,
             (('hydro_event_id', 'integer'), ('urqmd_event_id', 'integer'),
-             ('pid', 'integer'), ('rap', 'real'), ('N', 'integer'))):
+             ('pid', 'integer'), ('rap', 'real'), ('dN_drap', 'real'))):
             collected_flag = False
         else:
             try_data = array(self.analyzed_db.executeSQLquery(
-                "select rap, N from %s where "
+                "select rap, dN_drap from %s where "
                 "hydro_event_id = %d and urqmd_event_id = %d and "
                 "pid = %d" % (analyzed_table_name, 1, 1, pid)).fetchall())
             if try_data.size == 0: collected_flag = False
@@ -324,9 +325,8 @@ class ParticleReader(object):
                     hist = self.get_particle_yield_vs_rap_hist(
                         hydroId, urqmdId, pidString, rap_type)
                     for irap in range(len(hist[:,0])):
-                        self.analyzed_db.insertIntoTable(
-                            analyzed_table_name, (hydroId, urqmdId, pid, 
-                            hist[irap,0], int(hist[irap,1]))
+                        self.analyzed_db.insertIntoTable(analyzed_table_name, 
+                            (hydroId, urqmdId, pid, hist[irap,0], hist[irap,1])
                         )
         self.analyzed_db._dbCon.commit() # commit changes
 
@@ -341,69 +341,106 @@ class ParticleReader(object):
             self.collect_particle_yield_vs_rap(aParticle, 
                                                rap_type='pseudorapidity')
 
-    
-    ################################################################################
+    ###########################################################################
     # functions to collect particle emission function
-    ################################################################################ 
-    def collectParticleYieldvsSpatialVariable(self, particleName = 'pion_p', SVtype = 'tau', SV_range = linspace(0, 12, 61), rapType = 'rapidity', rap_range = [-0.5, 0.5]):
+    ########################################################################### 
+    def get_particle_yield_vs_sv_hist(self, hydro_id, urqmd_id, pid_string, 
+        sv_type, sv_boundaries, rap_type, rap_range):
         """
-            return event averaged particle yield per spacial variable, tau, x, y, or eta_s. 
-            Default output is (tau, dN/dtau)
-            event loop over all the hydro + UrQMD events
+            return [sv_type, dN/dsv_type] as a numpy 2D-array for one given 
+            event in the database
         """
-        print("collect particle yield as a function of %s for %s" % (SVtype, particleName))
-        pidString = self.getPidString(particleName)
-        SV_avg = []
-        dNdSV = []
-        dNdSVerr = []
-        Nev = self.totNev
-        for iSV in range(len(SV_range)-1):
-            SVlow = SV_range[iSV]
-            SVhigh = SV_range[iSV+1]
-            dSV = SVhigh - SVlow
-            #fetch dN/dSV data
-            dNdata = self.db.executeSQLquery("select count(*), avg(%s) from particle_list where (%s) and (%g <= %s and %s < %g) and (%g <= %s and %s <= %g)" % (SVtype, pidString, SVlow, SVtype, SVtype, SVhigh, rap_range[0], rapType, rapType, rap_range[1])).fetchall()
-            deltaN = dNdata[0][0]
-            if dNdata[0][1] == None:
-                SV_avg.append((SVlow + SVhigh)/2.)
-            else:
-                SV_avg.append(dNdata[0][1])
-            dNdSV.append(deltaN/dSV/Nev)
-            dNdSVerr.append(sqrt(deltaN/dSV/Nev)/sqrt(Nev))
+        #set sv_type bin boundaries
+        nsv = len(sv_boundaries) - 1
+        dsv = sv_boundaries[1] - sv_boundaries[0]
+        sv_avg = (sv_boundaries[0:-1] + sv_boundaries[1:])/2.
+        dNdsv = zeros(nsv)
+        
+        #fetch data from the database
+        data = array(self.db.executeSQLquery(
+            "select %s from particle_list where hydroEvent_id = %d and "
+            "UrQMDEvent_id = %d and (%s) and (%g <= %s and %s <= %g)" 
+            % (sv_type, hydro_id, urqmd_id, pid_string, rap_range[0], rap_type, 
+               rap_type, rap_range[1])).fetchall())
 
-        return(array([SV_avg, dNdSV, dNdSVerr]).transpose())
-    
-    def getParticleYieldvsSpatialVariable(self, particleName = 'pion_p', SVtype = 'tau', SV_range = linspace(0, 12, 61), rapType = 'rapidity', rap_range = [-0.5, 0.5]):
+        #bin data
+        if data.size != 0:
+            for isv in range(len(sv_boundaries)-1):
+                sv_low = sv_boundaries[isv]
+                sv_high = sv_boundaries[isv+1]
+                temp_data = data[data[:,0] < sv_high]
+                if temp_data.size != 0:
+                    temp_data = temp_data[temp_data[:,0] >= sv_low]
+                    if temp_data.size != 0:
+                        sv_avg[isv] = mean(temp_data)
+                        dNdsv[isv] = len(temp_data)/dsv
+        
+        return array([sv_avg, dNdsv]).transpose()
+
+    def collect_particle_yield_vs_spatial_variable(
+        self, particle_name, sv_type, sv_range, rap_type, rap_range):
         """
-            store and retrieve event averaged particle yield per spacial variable, 
-            tau, x, y, or eta_s. 
-            Default output is (tau, dN/dtau)
-            event loop over all the hydro + UrQMD events
+            collect particle yield per spacial variable, (tau, x, y, or eta_s) 
+            for each event and store them into analyzed database
         """
-        pidString = self.getPidString(particleName)
-        pid = self.pid_lookup[particleName]
-        Nev = self.totNev
-        if self.db.createTableIfNotExists("particleEmission_d%s_%s" % (SVtype, rapType), (("pid","integer"), ("%s" % SVtype, "real"), ("dNdy", "real"), ("dNdyerr", "real") )):
-            dNdata = self.collectParticleYieldvsSpatialVariable(particleName, SVtype, SV_range, rapType, rap_range)
-            for i in range(len(dNdata[:,0])):
-                self.db.insertIntoTable("particleEmission_d%s_%s" % (SVtype, rapType), (pid, dNdata[i,0], dNdata[i,1], dNdata[i,2]))
-            self.db._dbCon.commit()  # commit changes
+        # get pid string
+        pid = self.pid_lookup[particle_name]
+        pid_string = self.getPidString(particle_name)
+        if rap_type == 'rapidity':
+            analyzed_table_name = 'particle_emission_d%s' % sv_type
+        elif rap_type == 'pseudorapidity':
+            analyzed_table_name = 'particle_emission_d%s_eta' % sv_type
         else:
-            dNdata = array(self.db.executeSQLquery("select %s, dNdy, dNdyerr from particleEmission_d%s_%s where pid = %d" % (SVtype, SVtype, rapType, pid)).fetchall())
-            if dNdata.size == 0:
-                dNdata = self.collectParticleYieldvsSpatialVariable(particleName, SVtype, SV_range, rapType, rap_range)
-                if dNdata.size == 0:
-                    print("can not find the particle %s" % particleName)
-                    return(array([]))
-                else:
-                    for i in range(len(dNdata[:,0])):
-                        self.db.insertIntoTable("particleEmission_d%s_%s" % (SVtype, rapType), (pid, dNdata[i,0], dNdata[i,1], dNdata[i,2]))
-                    self.db._dbCon.commit()  # commit changes
+            raise TypeError("ParticleReader.collect_particle_yield_vs_"
+                            "spatial_variable: invalid input rap_type : %s" 
+                            % rap_type)
+        
+        # check whether the data are already collected
+        collected_flag = True
+        if self.analyzed_db.createTableIfNotExists(analyzed_table_name,
+            (('hydro_event_id', 'integer'), ('urqmd_event_id', 'integer'),
+             ('pid', 'integer'), ('%s' % sv_type, 'real'), 
+             ('dN_d%s' % sv_type, 'real'))):
+            collected_flag = False
+        else:
+            try_data = array(self.analyzed_db.executeSQLquery(
+                "select %s, dN_d%s from %s where "
+                "hydro_event_id = %d and urqmd_event_id = %d and pid = %d" 
+                % (sv_type, sv_type, analyzed_table_name, 1, 1, pid)
+            ).fetchall())
+            if try_data.size == 0: collected_flag = False
+        
+        # check whether user wants to update the analyzed data
+        if collected_flag:
+            print("dN/d%s of %s has already been collected!" 
+                  % (sv_type, particle_name))
+            inputval = raw_input(
+                "Do you want to delete the existing one and collect again?")
+            if inputval.lower() == 'y' or inputval.lower() == 'yes':
+                self.analyzed_db.executeSQLquery("delete from %s "
+                    "where pid = %d" % (analyzed_table_name, pid))
+                self.analyzed_db._dbCon.commit() # commit changes
+                collected_flag = False
 
-        return(dNdata)
+        # collect data loop over all the events
+        if not collected_flag:
+            print("collect particle yield as a function of %s for %s" 
+                  % (sv_type, particle_name))
+            for hydroId in range(1, self.hydroNev+1):
+                urqmd_nev = self.db.executeSQLquery(
+                    "select Number_of_UrQMDevents from UrQMD_NevList where "
+                    "hydroEventId = %d " % hydroId).fetchall()[0][0]
+                for urqmdId in range(1, urqmd_nev+1):
+                    hist = self.get_particle_yield_vs_sv_hist(
+                        hydroId, urqmdId, pid_string, sv_type, sv_range,
+                        rap_type, rap_range)
+                    for isv in range(len(hist[:,0])):
+                        self.analyzed_db.insertIntoTable(analyzed_table_name, 
+                            (hydroId, urqmdId, pid, hist[isv,0], hist[isv,1])
+                        )
+        self.analyzed_db._dbCon.commit() # commit changes
 
     
-
     ################################################################################
     # functions to collect particle anisotropic flows
     ################################################################################ 
@@ -1437,12 +1474,21 @@ if __name__ == "__main__":
     test = ParticleReader(str(argv[1]))
     test.collect_particle_spectra("charged", rap_type = 'pseudorapidity')
     test.collect_particle_yield_vs_rap("charged", rap_type = 'pseudorapidity')
-    #test.collect_basic_particle_spectra()
-    #test.collect_basic_particle_yield()
-    #for aPart in ['pion_p', 'kaon_p', 'proton']:
-    #    print(test.getParticleYieldvsSpatialVariable(particleName = aPart, SVtype = 'tau', SV_range = linspace(0.0, 15.0, 76)))
-    #    print(test.getParticleYieldvsSpatialVariable(particleName = aPart, SVtype = 'x', SV_range = linspace(-13.0, 13.0, 101)))
-    #    print(test.getParticleYieldvsSpatialVariable(particleName = aPart, SVtype = 'eta', SV_range = linspace(-5.0, 5.0, 51)))
+    test.collect_basic_particle_spectra()
+    test.collect_basic_particle_yield()
+    for aPart in ['pion_p', 'kaon_p', 'proton']:
+        test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
+            linspace(0.0, 15.0, 76), 'rapidity', (-0.5, 0.5))
+        test.collect_particle_yield_vs_spatial_variable(aPart, 'x', 
+            linspace(-13.0, 13.0, 131), 'rapidity', (-0.5, 0.5))
+        test.collect_particle_yield_vs_spatial_variable(aPart, 'eta', 
+            linspace(-2.0, 2.0, 41), 'rapidity', (-0.5, 0.5))
+        test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
+            linspace(0.0, 15.0, 76), 'pseudorapidity', (-0.5, 0.5))
+        test.collect_particle_yield_vs_spatial_variable(aPart, 'x', 
+            linspace(-13.0, 13.0, 131), 'pseudorapidity', (-0.5, 0.5))
+        test.collect_particle_yield_vs_spatial_variable(aPart, 'eta', 
+            linspace(-2.0, 2.0, 41), 'pseudorapidity', (-0.5, 0.5))
     #print(test.getAvgdiffvnflow(particleName = "charged", psiR = 0., order = 2, pT_range = linspace(0.0, 2.0, 20)))
     #print(test.getAvgintevnflowvsrap(particleName = "charged", psiR = 0., order = 2, rap_range = linspace(-2.0, 2.0, 20)))
     #print(test.getParticleintevn('charged'))
