@@ -441,246 +441,235 @@ class ParticleReader(object):
         self.analyzed_db._dbCon.commit() # commit changes
 
     
-    ################################################################################
+    ###########################################################################
     # functions to collect particle anisotropic flows
-    ################################################################################ 
-    def collectAvgdiffvnflow(self, particleName = 'pion_p', psiR = 0., rapidity_range = [-0.5, 0.5], pseudorap_range = [-0.5, 0.5]):
+    ########################################################################### 
+    def get_Qn_vector(self, hydro_id, urqmd_id, pid_string, 
+                      weight_type, rap_type):
         """
-            collect <cos(n*(phi_i - psiR))>, which is averaged over for all particles for the given particle 
-            species over all events
+            return Qn_data, Qn_pTdata for partitle with pid_string with 
+            weight_type from one given event
+            Qn_data = (n, Nparticle, Qn, Qn_psi, Nparticle_sub, QnA, QnA_psi,
+                       QnB, QnB_psi)
+            Qn_pTdata = (n, pT, Nparticle, Qn, Qn_psi, Nparticle_sub, QnA, 
+                         QnA_psi, QnB, QnB_psi)
         """
-        print("collect averaged diff vn flow of %s ..." % particleName)
-        pT_range = linspace(0, 3, 31)
-        pidString = self.getPidString(particleName)
-        pid = self.pid_lookup[particleName]
         norder = 6
-        Nev = self.totNev
-        tableNamesList = ["Avgdiffvnflow", "Avgdiffvnetaflow"]
-        rapTypes = ['rapidity', 'pseudorapidity']
-        for itable in range(len(tableNamesList)):
-            for ipT in range(len(pT_range)-1):
-                pTlow = pT_range[ipT]
-                pThigh = pT_range[ipT+1]
-                dpT = pThigh - pTlow
-                data = array(self.db.executeSQLquery("select pT, phi_p from particle_list where (%s) and (%g <= pT and pT <= %g) and (%g <= %s and %s <= %g)" % (pidString, pTlow, pThigh, rapidity_range[0], rapTypes[itable], rapTypes[itable], rapidity_range[1])).fetchall())
-                for iorder in range(1, norder+1):
-                    if len(data) == 0:
-                        pTavg = (pTlow + pThigh)/2.
-                        vn_real = 0.0; vn_real_err = 0.0
-                        vn_imag = 0.0; vn_imag_err = 0.0
-                    else:
-                        pTavg = mean(data[:,0])
-                        temparray = cos(iorder*(data[:,1] - psiR))
-                        vn_real = mean(temparray)
-                        vn_real_err = std(temparray)/sqrt(Nev)
-                        temparray = sin(iorder*(data[:,1] - psiR))
-                        vn_imag = mean(temparray)
-                        vn_imag_err = std(temparray)/sqrt(Nev)
-                        self.db.insertIntoTable(tableNamesList[itable], (pid, iorder, pTavg, vn_real, vn_real_err, vn_imag, vn_imag_err))
-            self.db._dbCon.commit()  # commit changes
-
-    def collectBasicParticleAvgdiffvnflow(self, psi_R = 0.):
-        """
-            collect particle averaged vn flow into database for commonly interested hadrons
-        """
-        BasicParticleList = ['pion_p', 'kaon_p', 'proton']
-        for aParticle in BasicParticleList:
-            self.collectAvgdiffvnflow(particleName = aParticle, psiR = psi_R)
-    
-    def getAvgdiffvnflow(self, particleName = "pion_p", psiR = 0., order = 2, pT_range = linspace(0.2, 2.5, 20), rapidity_range = [-0.5, 0.5], pseudorap_range = [-0.5, 0.5]):
-        """
-            retrieve and interpolate the particle average vn flow data with respect
-            to event plane angle, psiR. 
-            Collect the average vn flow into database if data does not exist
-        """
-        pid = self.pid_lookup[particleName]
-        collectFlag = False
-        if self.db.createTableIfNotExists("Avgdiffvnflow", (("pid", "integer"), ("n", "integer"), ("pT", "real"), ("vn_real", "real"), ("vn_real_err", "real"), ("vn_imag", "real"), ("vn_imag_err", "real") )):
-            collectFlag = True
-        if self.db.createTableIfNotExists("Avgdiffvnetaflow", (("pid", "integer"), ("n", "integer"), ("pT", "real"), ("vn_real", "real"), ("vn_real_err", "real"), ("vn_imag", "real"), ("vn_imag_err", "real") )):
-            collectFlag = True
-        if collectFlag:
-            self.collectBasicParticleAvgdiffvnflow() 
-        vndata = array(self.db.executeSQLquery("select pT, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgdiffvnflow where pid = %d and n = %d" % (pid, order)).fetchall())
-        vnetadata = array(self.db.executeSQLquery("select pT, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgdiffvnetaflow where pid = %d and n = %d" % (pid, order)).fetchall())
-        if(vndata.size == 0):
-            self.collectAvgdiffvnflow(particleName)
-            vndata = array(self.db.executeSQLquery("select pT, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgdiffvnflow where pid = %d and n = %d" % (pid, order)).fetchall())
-            vnetadata = array(self.db.executeSQLquery("select pT, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgdiffvnetaflow where pid = %d and n = %d" % (pid, order)).fetchall())
+        npT = 30
+        pT_boundaries = linspace(0.0, 3.0, npT+1)
+        dpT = pT_boundaries[1] - pT_boundaries[0]
+        Qn_data = zeros([norder, 9])
+        Qn_pTdata = zeros([norder*npT, 10])
+        for iorder in range(norder):
+            Qn_data[iorder,0] = iorder + 1
+            for ipT in range(npT):
+                Qn_pTdata[iorder*npT + ipT, 0] = iorder + 1
         
-        vnmag = vndata[:,1]*cos(order*psiR) + vndata[:,3]*sin(order*psiR)
-        vnmag_err = sqrt((vndata[:,2]*cos(order*psiR))**2. + (vndata[:,4]*sin(order*psiR))**2.)
-        vnetamag = vnetadata[:,1]*cos(order*psiR) + vnetadata[:,3]*sin(order*psiR)
-        vnetamag_err = sqrt((vnetadata[:,2]*cos(order*psiR))**2. + (vnetadata[:,4]*sin(order*psiR))**2.)
-        #interpolate results to desired pT range
-        vnpTinterp = interp(pT_range, vndata[:,0], vnmag)
-        vnpTinterp_err = interp(pT_range, vndata[:,0], vnmag_err)
-        vnpTetainterp = interp(pT_range, vnetadata[:,0], vnetamag)
-        vnpTetainterp_err = interp(pT_range, vnetadata[:,0], vnetamag_err)
-        results = array([pT_range, vnpTinterp, vnpTinterp_err, vnpTetainterp, vnpTetainterp_err])
-        return(transpose(results))
+        print("processing event: (%d, %d) " % (hydro_id, urqmd_id))
+        particleList = array(self.db.executeSQLquery(
+            "select pT, phi_p, %s from particle_list where "
+            "hydroEvent_id = %d and UrQMDEvent_id = %d and (%s)" 
+            % (rap_type, hydro_id, urqmd_id, pid_string)).fetchall())
 
-    def collectAvgintevnflow(self, particleName = 'pion_p', psiR = 0.):
-        """
-            collect pT integrated <cos(n*(phi_i - psiR))> and <cos(n*(phi_i - psiR))> 
-            as a function of rapidity or pseudorapidity.
-            The ensemble average is averaged over for all particles for the given 
-            particle species over all events
-        """
-        print("collect averaged inte vn flow of %s ..." % particleName)
-        pidString = self.getPidString(particleName)
-        pid = self.pid_lookup[particleName]
-        eta_range = linspace(-3, 3, 61)
-        norder = 6
-        Nev = self.totNev
-        tableNamesList = ["Avgintevnflow", "Avgintevnetaflow"]
-        rapTypes = ['rapidity', 'pseudorapidity']
-        for itable in range(len(tableNamesList)):
-            for ieta in range(len(eta_range)-1):
-                etalow = eta_range[ieta]
-                etahigh = eta_range[ieta+1]
-                deta = etahigh - etalow
-                data = array(self.db.executeSQLquery("select %s, phi_p from particle_list where (%s) and (%g <= %s and %s <= %g)" % (rapTypes[itable], pidString, etalow, rapTypes[itable], rapTypes[itable], etahigh)).fetchall())
-                for iorder in range(1, norder+1):
-                    if len(data) == 0:
-                        eta_avg = (etalow + etahigh)/2.
-                        vn_real = 0.0; vn_real_err = 0.0
-                        vn_imag = 0.0; vn_imag_err = 0.0
-                    else:
-                        eta_avg = mean(data[:,0])
-                        temparray = cos(iorder*(data[:,1] - psiR))
-                        vn_real = mean(temparray)
-                        vn_real_err = std(temparray)/sqrt(Nev)
-                        temparray = sin(iorder*(data[:,1] - psiR))
-                        vn_imag = mean(temparray)
-                        vn_imag_err = std(temparray)/sqrt(Nev)
-                        self.db.insertIntoTable(tableNamesList[itable], (pid, iorder, eta_avg, vn_real, vn_real_err, vn_imag, vn_imag_err))
-            self.db._dbCon.commit()  # commit changes
+        # no particle in the event
+        if particleList.size == 0: return(Qn_data, Qn_pTdata) 
 
-    def collectBasicParticleAvgintevnflow(self, psi_R = 0.):
-        """
-            collect particle averaged pT integrated vn flow into database for 
-            commonly interested hadrons
-        """
-        BasicParticleList = ['pion_p', 'kaon_p', 'proton']
-        for aParticle in BasicParticleList:
-            self.collectAvgintevnflow(particleName = aParticle, psiR = psi_R)
-    
-    def getAvgintevnflowvsrap(self, particleName = "pion_p", psiR = 0., order = 2, rap_range = linspace(-2.5, 2.5, 20)):
-        """
-            retrieve and interpolate the particle average pT integrated vn flow data
-            as a function of rapidity and pseudorapidity. 
-            Collect the average vn flow into database if data does not exist
-        """
-        pid = self.pid_lookup[particleName]
-        collectFlag = False
-        if self.db.createTableIfNotExists("Avgintevnflow", (("pid", "integer"), ("n", "integer"), ("eta", "real"), ("vn_real", "real"), ("vn_real_err", "real"), ("vn_imag", "real"), ("vn_imag_err", "real") )):
-            collectFlag = True
-        if self.db.createTableIfNotExists("Avgintevnetaflow", (("pid", "integer"), ("n", "integer"), ("eta", "real"), ("vn_real", "real"), ("vn_real_err", "real"), ("vn_imag", "real"), ("vn_imag_err", "real") )):
-            collectFlag = True
-        if collectFlag:
-            self.collectBasicParticleAvgintevnflow() 
-        vndata = array(self.db.executeSQLquery("select eta, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgintevnflow where pid = %d and n = %d" % (pid, order)).fetchall())
-        vnetadata = array(self.db.executeSQLquery("select eta, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgintevnetaflow where pid = %d and n = %d" % (pid, order)).fetchall())
-        if(vndata.size == 0):
-            self.collectAvgintevnflow(particleName)
-            vndata = array(self.db.executeSQLquery("select eta, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgintevnflow where pid = %d and n = %d" % (pid, order)).fetchall())
-            vnetadata = array(self.db.executeSQLquery("select eta, vn_real, vn_real_err, vn_imag, vn_imag_err from Avgintevnetaflow where pid = %d and n = %d" % (pid, order)).fetchall())
+        pT = particleList[:,0]
+        phi = particleList[:,1]
+        rap = particleList[:,2]
+        if weight_type == 'pT':
+            weight = pT
+        elif weight_type == '1':
+            weight = ones(len(pT))
         
-        vnmag = vndata[:,1]*cos(order*psiR) + vndata[:,3]*sin(order*psiR)
-        vnmag_err = sqrt((vndata[:,2]*cos(order*psiR))**2. + (vndata[:,4]*sin(order*psiR))**2.)
-        vnetamag = vnetadata[:,1]*cos(order*psiR) + vnetadata[:,3]*sin(order*psiR)
-        vnetamag_err = sqrt((vnetadata[:,2]*cos(order*psiR))**2. + (vnetadata[:,4]*sin(order*psiR))**2.)
-        #interpolate results to desired pT range
-        vnpTinterp = interp(rap_range, vndata[:,0], vnmag)
-        vnpTinterp_err = interp(rap_range, vndata[:,0], vnmag_err)
-        vnpTetainterp = interp(rap_range, vnetadata[:,0], vnetamag)
-        vnpTetainterp_err = interp(rap_range, vnetadata[:,0], vnetamag_err)
-        results = array([rap_range, vnpTinterp, vnpTinterp_err, vnpTetainterp, vnpTetainterp_err])
-        return(transpose(results))
-    
-    def getParticleintevn(self, particleName = 'pion_p', psiR = 0., order = 2, rapRange = [-0.5, 0.5], pseudorapRange = [-0.5, 0.5]):
-        """
-            return pT-integrated vn of particle species "particleName" within given 
-            rapidity or pseudorapidity range by users
-        """
-        npoint = 50
-        Nev = self.totNev
-        
-        rapArray = linspace(rapRange[0], rapRange[1], npoint)
-        dy = rapArray[1] - rapArray[0]
-        vndata = self.getAvgintevnflowvsrap(particleName, psiR = psiR, order = order, rap_range = rapArray)
-        vn = sum(vndata[:,1])*dy
-        vn_err = mean(vndata[:,2])   # need to be improved
-        
-        pseudorapArray = linspace(pseudorapRange[0], pseudorapRange[1], npoint)
-        deta = pseudorapArray[1] - pseudorapArray[0]
-        vnetadata = self.getAvgintevnflowvsrap(particleName, psiR = psiR, order = order, rap_range = pseudorapArray)
-        vneta = sum(vnetadata[:,3])*deta
-        vneta_err = mean(vnetadata[:,4])   # need to be improved
+        # bin particle samples
+        idx = []
+        idxA = []
+        idxB = []
+        idx_pT = [[]]*npT
+        idxA_pT = [[]]*npT
+        idxB_pT = [[]]*npT
+        for ipart in range(len(pT)):
+            pTpos = int((pT[ipart] - pT_boundaries[0])/dpT)
+            if rap[ipart] <= 0.5 and rap[ipart] >= -0.5:
+                idx.append(ipart)
+                if pTpos < npT: idx_pT[pTpos].append(ipart)
+            if rap[ipart] <= 2.0 and rap[ipart] > 0.5:
+                idxA.append(ipart)
+                if pTpos < npT: idxA_pT[pTpos].append(ipart)
+            if rap[ipart] < -0.5 and rap[ipart] >= 2.0:
+                idxB.append(ipart)
+                if pTpos < npT: idxB_pT[pTpos].append(ipart)
 
-        return(vn, vn_err, vneta, vneta_err)
+        # calculate Qn vectors
+        Nparticle = len(idx)
+        Nparticle_sub = min(len(idxA), len(idxB))
+        for iorder in range(1, norder+1):
+            # Qn vectors at mid rapidity
+            temp_Qn_x = sum(weight[idx]*cos(iorder*phi[idx]))
+            temp_Qn_y = sum(weight[idx]*sin(iorder*phi[idx]))
+            Qn_data[iorder-1,1] = Nparticle
+            Qn_data[iorder-1,2] = sqrt(temp_Qn_x**2 + temp_Qn_y**2)
+            Qn_data[iorder-1,3] = arctan2(temp_Qn_y, temp_Qn_x)/iorder
+            # QnA vectors at forward rapidity
+            temp_Qn_x = sum(weight[idxA[0:Nparticle_sub]]
+                            *cos(iorder*phi[idxA[0:Nparticle_sub+1]]))
+            temp_Qn_y = sum(weight[idxA[0:Nparticle_sub]]
+                            *sin(iorder*phi[idxA[0:Nparticle_sub+1]]))
+            Qn_data[iorder-1,4] = Nparticle_sub
+            Qn_data[iorder-1,5] = sqrt(temp_Qn_x**2 + temp_Qn_y**2)
+            Qn_data[iorder-1,6] = arctan2(temp_Qn_y, temp_Qn_x)/iorder
+            # QnB vector at backward rapidity
+            temp_Qn_x = sum(weight[idxB[0:Nparticle_sub]]
+                            *cos(iorder*phi[idxB[0:Nparticle_sub+1]]))
+            temp_Qn_y = sum(weight[idxB[0:Nparticle_sub]]
+                            *sin(iorder*phi[idxB[0:Nparticle_sub+1]]))
+            Qn_data[iorder-1,7] = sqrt(temp_Qn_x**2 + temp_Qn_y**2)
+            Qn_data[iorder-1,8] = arctan2(temp_Qn_y, temp_Qn_x)/iorder
+            for ipT in range(npT):
+                data_idx = (iorder-1)*npT + ipT
+                if idx_pT[ipT] == []:
+                    Qn_pTdata[data_idx,1] = (
+                        (pT_boundaries[ipT] + pT_boundaries[ipT+1])/2.)
+                    break
+                Nparticle_pT = len(idx_pT[ipT])
+                Nparticle_sub_pT = min(len(idxA_pT[ipT]), len(idxB_pT[ipT]))
+                Qn_pTdata[data_idx,1] = mean(pT[idx_pT[ipT]])
+                # pT differential Qn vectors at mid rapidity
+                temp_Qn_x = sum(
+                    weight[idx_pT[ipT]]*cos(iorder*phi[idx_pT[ipT]]))
+                temp_Qn_y = sum(
+                    weight[idx_pT[ipT]]*sin(iorder*phi[idx_pT[ipT]]))
+                Qn_pTdata[data_idx,2] = Nparticle_pT
+                Qn_pTdata[data_idx,3] = sqrt(temp_Qn_x**2 + temp_Qn_y**2)
+                Qn_pTdata[data_idx,4] = arctan2(temp_Qn_y, temp_Qn_x)/iorder
+                # pT differential QnA vectors at forward rapidity
+                temp_Qn_x = sum(
+                    weight[idxA_pT[ipT][0:Nparticle_sub_pT]]
+                    *cos(iorder*phi[idxA_pT[ipT][0:Nparticle_sub_pT]]))
+                temp_Qn_y = sum(
+                    weight[idxA_pT[ipT][0:Nparticle_sub_pT]]
+                    *sin(iorder*phi[idxA_pT[ipT][0:Nparticle_sub_pT]]))
+                Qn_pTdata[data_idx,5] = Nparticle_sub_pT
+                Qn_pTdata[data_idx,6] = sqrt(temp_Qn_x**2 + temp_Qn_y**2)
+                Qn_pTdata[data_idx,7] = arctan2(temp_Qn_y, temp_Qn_x)/iorder
+                # pT differential QnB vector at backward rapidity
+                temp_Qn_x = sum(
+                    weight[idxB_pT[ipT][0:Nparticle_sub_pT]]
+                    *cos(iorder*phi[idxB_pT[ipT][0:Nparticle_sub_pT]]))
+                temp_Qn_y = sum(
+                    weight[idxB_pT[ipT][0:Nparticle_sub_pT]]
+                    *sin(iorder*phi[idxB_pT[ipT][0:Nparticle_sub_pT]]))
+                Qn_pTdata[data_idx,8] = sqrt(temp_Qn_x**2 + temp_Qn_y**2)
+                Qn_pTdata[data_idx,9] = arctan2(temp_Qn_y, temp_Qn_x)/iorder
 
-    ################################################################################
-    # functions to collect particle event plane anisotropic flows with finite resolution 
-    ################################################################################ 
-    def collectGlobalQnvectorforeachEvent(self):
-        """
-            collect event plane Qn and sub-event plane QnA, QnB vectors for nth order 
-            harmonic flow calculated using all charged particles in the event
-            Qn = 1/Nparticle * sum_i exp[i*n*phi_i]
-        """
-        particleName = "charged"
-        weightTypes = ['1', 'pT']
-        norder = 6
-        Nev = self.totNev
-        pidString = self.getPidString(particleName)
+        return(Qn_data, Qn_pTdata)
         
-        etaGap = 1
-        etaBound1 = etaGap/2.; etaBound2 = - etaGap/2.
-        if self.db.createTableIfNotExists("globalQnvector", (("hydroEvent_id","integer"), ("UrQMDEvent_id", "integer"), ("weightType", "text"), ("n", "integer"), ("Nparticle", "integer"), ("Qn", "real"), ("Qn_psi", "real"), ("Nparticle_A", "integer"), ("subQnA", "real"), ("subQnA_psi", "real"), ("Nparticle_B", "integer"), ("subQnB", "real"), ("subQnB_psi", "real") )):
-            for hydroId in range(1, self.hydroNev+1):
-                UrQMDNev = self.db.executeSQLquery("select Number_of_UrQMDevents from UrQMD_NevList where hydroEventId = %d " % hydroId).fetchall()[0][0]
-                for UrQMDId in range(1, UrQMDNev+1):
-                    print("processing event: (%d, %d) " % (hydroId, UrQMDId))
-                    particleList = array(self.db.executeSQLquery("select pT, phi_p, pseudorapidity from particle_list where hydroEvent_id = %d and UrQMDEvent_id = %d and (%s)" % (hydroId, UrQMDId, pidString)).fetchall())
-                    pT = particleList[:,0]
-                    phi = particleList[:,1]
-                    eta = particleList[:,2]
-                    Nparticle = len(pT)
-                    Nparticle_A = min(len(pT[eta > etaBound1]), len(pT[eta < etaBound2])); Nparticle_B = Nparticle_A
-                    for weightType in weightTypes:
-                        if weightType == '1':
-                            weight = ones(len(pT))
-                        elif weightType == 'pT':
-                            weight = pT
-                        for order in range(1,norder+1):
-                            #calculate subQn vector
-                            idx_A = eta > etaBound1
-                            subQnA_X = sum(weight[idx_A]*cos(order*phi[idx_A]))
-                            subQnA_Y = sum(weight[idx_A]*sin(order*phi[idx_A]))
-                            subPsi_nA = arctan2(subQnA_Y, subQnA_X)/order
-                            subQnA = sqrt(subQnA_X**2. + subQnA_Y**2.)/Nparticle_A
-                            idx_B = eta < etaBound2
-                            subQnB_X = sum(weight[idx_B]*cos(order*phi[idx_B]))
-                            subQnB_Y = sum(weight[idx_B]*sin(order*phi[idx_B]))
-                            subPsi_nB = arctan2(subQnB_Y, subQnB_X)/order
-                            subQnB = sqrt(subQnB_X**2. + subQnB_Y**2.)/Nparticle_B
-                        
-                            #calculate Qn vector
-                            Qn_X = sum(weight*cos(order*phi))
-                            Qn_Y = sum(weight*sin(order*phi))
-                            Psi_n = arctan2(Qn_Y, Qn_X)/order
-                            Qn = sqrt(Qn_X**2. + Qn_Y**2.)/Nparticle
-
-                            self.db.insertIntoTable("globalQnvector", (hydroId, UrQMDId, weightType, order, Nparticle, Qn, Psi_n, Nparticle_A, subQnA, subPsi_nA, Nparticle_B, subQnB, subPsi_nB))
-            self.db._dbCon.commit()  # commit changes
+    def collect_flow_Qn_vectors(self, particle_name):
+        """
+            collect nth order flow Qn vector and sub-event QnA, QnB vectors
+            for all the events. n is from 1 to 6
+            Qn := 1/Nparticle * sum_i exp[i*n*phi_i]
+            Qn are calculated using particles with -0.5 <= y or eta <= 0.5 
+            QnA are calculated using particles with 0.5 < y or eta < 2.0
+            QnB is calculated using particles with -2.0 < y or eta < -0.5
+            (y for identified particles and eta for all charged particles)
+        """
+        # get pid string
+        pid = self.pid_lookup[particle_name]
+        pid_string = self.getPidString(particle_name)
+        if particle_name == "charged":
+            rap_type = 'pseudorapidity'
         else:
-            print("Qn vectors from all charged particles are already collected!")
-            inputval = raw_input("Do you want to delete the existing one and collect again?")
+            rap_type = 'rapidity'
+        
+        weight_type = '1'
+        analyzed_table_name = 'flow_Qn_vectors'
+        analyzed_table_pTdiff_name = 'flow_Qn_vectors_pTdiff'
+        
+        # check whether the data are already collected
+        collected_flag = True
+        if self.analyzed_db.createTableIfNotExists(analyzed_table_name,
+            (('hydro_event_id', 'integer'), ('urqmd_event_id', 'integer'),
+             ('pid', 'integer'), ('weight_type', 'text'), ('n', 'integer'),
+             ('Nparticle', 'integer'), ('Qn', 'real'), ('Qn_psi', 'real'),
+             ('Nparticle_sub', 'integer'), ('QnA', 'real'), 
+             ('QnA_psi', 'real'), ('QnB', 'real'), ('QnB_psi', 'real')
+            )):
+            collected_flag = False
+        else:
+            try_data = array(self.analyzed_db.executeSQLquery(
+                "select Qn from %s where "
+                "hydro_event_id = %d and urqmd_event_id = %d and pid = %d and "
+                "n = 1" % (analyzed_table_name, 1, 1, pid)).fetchall())
+            if try_data.size == 0: collected_flag = False
+        
+        # check whether user wants to update the analyzed data
+        if collected_flag:
+            print("flow Qn vectors for %s has already been collected!" 
+                  % particle_name)
+            inputval = raw_input(
+                "Do you want to delete the existing one and collect again?")
             if inputval.lower() == 'y' or inputval.lower() == 'yes':
-                self.db.executeSQLquery("drop table globalQnvector")
-                self.collectGlobalQnvectorforeachEvent()
+                self.analyzed_db.executeSQLquery("delete from %s "
+                    "where pid = %d" % (analyzed_table_name, pid))
+                self.analyzed_db._dbCon.commit() # commit changes
+                collected_flag = False
+        
+        # check whether the pT differential data are already collected
+        collected_pTdiff_flag = True
+        if self.analyzed_db.createTableIfNotExists(analyzed_table_pTdiff_name,
+            (('hydro_event_id', 'integer'), ('urqmd_event_id', 'integer'),
+             ('pid', 'integer'), ('weight_type', 'text'), ('n', 'integer'),
+             ('pT', 'real'), 
+             ('Nparticle', 'integer'), ('Qn', 'real'), ('Qn_psi', 'real'),
+             ('Nparticle_sub', 'integer'), ('QnA', 'real'), 
+             ('QnA_psi', 'real'), ('QnB', 'real'), ('QnB_psi', 'real')
+            )):
+            collected_pTdiff_flag = False
+        else:
+            try_data = array(self.analyzed_db.executeSQLquery(
+                "select Qn from %s where "
+                "hydro_event_id = %d and urqmd_event_id = %d and pid = %d and "
+                "n = 1" % (analyzed_table_pTdiff_name, 1, 1, pid)).fetchall())
+            if try_data.size == 0: collected_pTdiff_flag = False
+        
+        # check whether user wants to update the analyzed data
+        if collected_pTdiff_flag:
+            print("pT differential flow Qn vectors for %s has already been "
+                  "collected!" % particle_name)
+            inputval = raw_input(
+                "Do you want to delete the existing one and collect again?")
+            if inputval.lower() == 'y' or inputval.lower() == 'yes':
+                self.analyzed_db.executeSQLquery("delete from %s "
+                    "where pid = %d" % (analyzed_table_pTdiff_name, pid))
+                self.analyzed_db._dbCon.commit() # commit changes
+                collected_pTdiff_flag = False
+        
+        # collect data loop over all the events
+        if not collected_flag or not collected_pTdiff_flag:
+            print("collect flow Qn vectors for %s ..." % particle_name)
+            for hydroId in range(1, self.hydroNev+1):
+                urqmd_nev = self.db.executeSQLquery(
+                    "select Number_of_UrQMDevents from UrQMD_NevList where "
+                    "hydroEventId = %d " % hydroId).fetchall()[0][0]
+                for urqmdId in range(1, urqmd_nev+1):
+                    Qn_data, Qn_pTdata = self.get_Qn_vector(
+                        hydroId, urqmdId, pid_string, weight_type, rap_type)
+                    if not collected_flag:
+                        for item in range(len(Qn_data[:,0])):
+                            self.analyzed_db.insertIntoTable(
+                                analyzed_table_name, ((hydroId, urqmdId, pid, 
+                                weight_type) + tuple(Qn_data[item,:]))
+                            )
+                    if not collected_pTdiff_flag:
+                        for item in range(len(Qn_pTdata[:,0])):
+                            self.analyzed_db.insertIntoTable(
+                                analyzed_table_pTdiff_name, 
+                                ((hydroId, urqmdId, pid, weight_type) 
+                                 + tuple(Qn_pTdata[item,:]))
+                            )
+        self.analyzed_db._dbCon.commit() # commit changes
 
     def getFullplaneResolutionFactor(self, resolutionFactor_sub, Nfactor):
         """
@@ -1472,23 +1461,24 @@ if __name__ == "__main__":
     if len(argv) < 2:
         printHelpMessageandQuit()
     test = ParticleReader(str(argv[1]))
-    test.collect_particle_spectra("charged", rap_type = 'pseudorapidity')
-    test.collect_particle_yield_vs_rap("charged", rap_type = 'pseudorapidity')
-    test.collect_basic_particle_spectra()
-    test.collect_basic_particle_yield()
-    for aPart in ['pion_p', 'kaon_p', 'proton']:
-        test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
-            linspace(0.0, 15.0, 76), 'rapidity', (-0.5, 0.5))
-        test.collect_particle_yield_vs_spatial_variable(aPart, 'x', 
-            linspace(-13.0, 13.0, 131), 'rapidity', (-0.5, 0.5))
-        test.collect_particle_yield_vs_spatial_variable(aPart, 'eta', 
-            linspace(-2.0, 2.0, 41), 'rapidity', (-0.5, 0.5))
-        test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
-            linspace(0.0, 15.0, 76), 'pseudorapidity', (-0.5, 0.5))
-        test.collect_particle_yield_vs_spatial_variable(aPart, 'x', 
-            linspace(-13.0, 13.0, 131), 'pseudorapidity', (-0.5, 0.5))
-        test.collect_particle_yield_vs_spatial_variable(aPart, 'eta', 
-            linspace(-2.0, 2.0, 41), 'pseudorapidity', (-0.5, 0.5))
+    #test.collect_particle_spectra("charged", rap_type = 'pseudorapidity')
+    #test.collect_particle_yield_vs_rap("charged", rap_type = 'pseudorapidity')
+    #test.collect_basic_particle_spectra()
+    #test.collect_basic_particle_yield()
+    #for aPart in ['pion_p', 'kaon_p', 'proton']:
+    #    test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
+    #        linspace(0.0, 15.0, 76), 'rapidity', (-0.5, 0.5))
+    #    test.collect_particle_yield_vs_spatial_variable(aPart, 'x', 
+    #        linspace(-13.0, 13.0, 131), 'rapidity', (-0.5, 0.5))
+    #    test.collect_particle_yield_vs_spatial_variable(aPart, 'eta', 
+    #        linspace(-2.0, 2.0, 41), 'rapidity', (-0.5, 0.5))
+    #    test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
+    #        linspace(0.0, 15.0, 76), 'pseudorapidity', (-0.5, 0.5))
+    #    test.collect_particle_yield_vs_spatial_variable(aPart, 'x', 
+    #        linspace(-13.0, 13.0, 131), 'pseudorapidity', (-0.5, 0.5))
+    #    test.collect_particle_yield_vs_spatial_variable(aPart, 'eta', 
+    #        linspace(-2.0, 2.0, 41), 'pseudorapidity', (-0.5, 0.5))
+    test.collect_flow_Qn_vectors('pion_p')
     #print(test.getAvgdiffvnflow(particleName = "charged", psiR = 0., order = 2, pT_range = linspace(0.0, 2.0, 20)))
     #print(test.getAvgintevnflowvsrap(particleName = "charged", psiR = 0., order = 2, rap_range = linspace(-2.0, 2.0, 20)))
     #print(test.getParticleintevn('charged'))
