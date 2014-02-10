@@ -253,9 +253,9 @@ class ParticleReader(object):
             (y, dN/dy) or (eta, dN/deta) for one given event in the database
         """
         #set rap bin boundaries
-        nrap = 20
-        rap_min = -1.0
-        rap_max = 1.0
+        nrap = 40
+        rap_min = -2.0
+        rap_max = 2.0
         rap_boundaries = linspace(rap_min, rap_max, nrap + 1)
         drap = rap_boundaries[1] - rap_boundaries[0]
         rap_avg = (rap_boundaries[0:-1] + rap_boundaries[1:])/2.
@@ -401,7 +401,7 @@ class ParticleReader(object):
         elif rap_type == 'pseudorapidity':
             analyzed_table_name = 'particle_emission_d%s_eta' % sv_type
         else:
-            raise TypeError("ParticleReader.collect_particle_yield_vs_"
+            raise ValueError("ParticleReader.collect_particle_yield_vs_"
                             "spatial_variable: invalid input rap_type : %s" 
                             % rap_type)
         
@@ -699,15 +699,15 @@ if __name__ == "__main__":
     test.collect_basic_particle_yield()
     for aPart in ['pion_p', 'kaon_p', 'proton']:
         test.collect_flow_Qn_vectors(aPart)
-        #test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
-        #    linspace(0.0, 15.0, 76), 'rapidity', (-0.5, 0.5))
-        #test.collect_particle_yield_vs_spatial_variable(aPart, 'x', 
-        #    linspace(-13.0, 13.0, 131), 'rapidity', (-0.5, 0.5))
-        #test.collect_particle_yield_vs_spatial_variable(aPart, 'eta', 
-        #    linspace(-2.0, 2.0, 41), 'rapidity', (-0.5, 0.5))
-        #test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
-        #    linspace(0.0, 15.0, 76), 'pseudorapidity', (-0.5, 0.5))
-        #test.collect_particle_yield_vs_spatial_variable(aPart, 'x', 
-        #    linspace(-13.0, 13.0, 131), 'pseudorapidity', (-0.5, 0.5))
-        #test.collect_particle_yield_vs_spatial_variable(aPart, 'eta', 
-        #    linspace(-2.0, 2.0, 41), 'pseudorapidity', (-0.5, 0.5))
+        test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
+            linspace(0.0, 15.0, 76), 'rapidity', (-0.5, 0.5))
+        test.collect_particle_yield_vs_spatial_variable(aPart, 'x', 
+            linspace(-13.0, 13.0, 131), 'rapidity', (-0.5, 0.5))
+        test.collect_particle_yield_vs_spatial_variable(aPart, 'eta', 
+            linspace(-2.0, 2.0, 41), 'rapidity', (-0.5, 0.5))
+        test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
+            linspace(0.0, 15.0, 76), 'pseudorapidity', (-0.5, 0.5))
+        test.collect_particle_yield_vs_spatial_variable(aPart, 'x', 
+            linspace(-13.0, 13.0, 131), 'pseudorapidity', (-0.5, 0.5))
+        test.collect_particle_yield_vs_spatial_variable(aPart, 'eta', 
+            linspace(-2.0, 2.0, 41), 'pseudorapidity', (-0.5, 0.5))

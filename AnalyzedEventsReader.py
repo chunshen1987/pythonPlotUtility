@@ -286,10 +286,63 @@ class AnalyzedDataReader(object):
     ###########################################################################
     # functions to collect particle emission function
     ########################################################################### 
+    def get_particle_yield_vs_spatial_variable(
+        self, particle_name, sv_type, sv_range, rap_type):
+        """
+            This function performs event average for particle yield per
+            spatial variable from the database and interpolates to the 
+            desired sv values specified by the users.
+            It returns (sv, dN/(dsv), dN/(dsv)_err)
+        """
+        eps = 1e-15
+        pid = self.pid_lookup[particle_name]
+        if rap_type == 'rapidity':
+            analyzed_table_name = 'particle_emission_d%s' % sv_type
+        elif rap_type == 'pseudorapidity':
+            analyzed_table_name = 'particle_emission_d%s_eta' % sv_type
+        else:
+            raise ValueError("AnalyzedDataReader.get_particle_yield_vs_"
+                            "spatial_variable: invalid input rap_type : %s" 
+                            % rap_type)
+
+        nsv = len(self.db.executeSQLquery(
+            "select %s from %s where hydro_event_id = %d and "
+            "urqmd_event_id = %d and pid = %d" 
+            % (sv_type, analyzed_table_name, 1, 1, pid)).fetchall())
+
+        dN_avg = zeros([nsv, 3])
+
+        #fetch data
+        for hydroId in range(1, self.hydro_nev+1):
+            urqmd_nev = self.db.executeSQLquery(
+                "select Number_of_UrQMDevents from UrQMD_NevList where "
+                "hydroEventId = %d " % hydroId).fetchall()[0][0]
+            for urqmdId in range(1, urqmd_nev+1):
+                temp_data = array(self.db.executeSQLquery(
+                    "select %s, dN_d%s from %s where hydro_event_id = %d "
+                    "and urqmd_event_id = %d and pid = %d" 
+                    % (sv_type, sv_type, analyzed_table_name, hydroId, 
+                       urqmdId, pid)).fetchall())
+                dN_avg[:,0] += temp_data[:,0]*temp_data[:,1]
+                dN_avg[:,1] += temp_data[:,1]
+                dN_avg[:,2] += temp_data[:,1]**2
+        
+        # calculate <sv>, <dN/dsv>, and <dN/dsv>_err 
+        dN_avg[:,0] = dN_avg[:,0]/(dN_avg[:,1] + eps)
+        dN_avg[:,1] = dN_avg[:,1]/self.tot_nev
+        dN_avg[:,2] = (sqrt(dN_avg[:,2]/self.tot_nev - dN_avg[:,1]**2)
+                       /sqrt(self.tot_nev))
+        
+        #interpolate results to desired sv range
+        dNdyinterp = interp(sv_range, dN_avg[:,0], dN_avg[:,1])
+        dNdyinterp_err = interp(sv_range, dN_avg[:,0], dN_avg[:,2])
+        results = array([sv_range, dNdyinterp, dNdyinterp_err])
+        return transpose(results)
 
     ###########################################################################
     # functions to collect particle anisotropic flows
     ########################################################################### 
+
 #
 #    def collectAvgdiffvnflow(self, particleName = 'pion_p', psiR = 0., rapidity_range = [-0.5, 0.5], pseudorap_range = [-0.5, 0.5]):
 #        """
@@ -1257,7 +1310,9 @@ if __name__ == "__main__":
     test = AnalyzedDataReader(str(argv[1]))
     #print(test.get_particle_spectra('pion_p', pT_range=linspace(0.1, 2.5, 20), rap_type = 'pseudorapidity'))
     #print(test.get_particle_yield_vs_rap('pion_p', rap_type = 'rapidity', rap_range=linspace(-1.0, 1.0, 15)))
-    print(test.get_particle_yield('pion_p', rap_type = 'rapidity', rap_range=(-0.5, 0.5)))
+    #print(test.get_particle_yield('pion_p', rap_type = 'rapidity', rap_range=(-0.5, 0.5)))
+    print(test.get_particle_yield_vs_spatial_variable('pion_p', 'tau', 
+          linspace(0.6, 10, 50), rap_type = 'rapidity'))
     #print(test.getAvgdiffvnflow(particleName = "charged", psiR = 0., order = 2, pT_range = linspace(0.0, 2.0, 20)))
     #print(test.getAvgintevnflowvsrap(particleName = "charged", psiR = 0., order = 2, rap_range = linspace(-2.0, 2.0, 20)))
     #print(test.getParticleintevn('charged'))
