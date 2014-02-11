@@ -432,9 +432,18 @@ class AnalyzedDataReader(object):
         dN_avg[:,2] = (sqrt(dN_avg[:,2]/self.tot_nev - dN_avg[:,1]**2)
                        /sqrt(self.tot_nev))
         
+        # delete zero components for interpolation
+        idx = [] 
+        for i in range(len(dN_avg[:,0])):
+            if abs(dN_avg[i,0]) < 1e-15:
+                idx.append(i)
+        sv_mean = delete(dN_avg[:,0], idx)
+        dN_dsv = delete(dN_avg[:,1], idx)
+        dN_dsv_err = delete(dN_avg[:,2], idx)
+
         #interpolate results to desired sv range
-        dNdyinterp = interp(sv_range, dN_avg[:,0], dN_avg[:,1])
-        dNdyinterp_err = interp(sv_range, dN_avg[:,0], dN_avg[:,2])
+        dNdyinterp = interp(sv_range, sv_mean, dN_dsv)
+        dNdyinterp_err = interp(sv_range, sv_mean, dN_dsv_err)
         results = array([sv_range, dNdyinterp, dNdyinterp_err])
         return transpose(results)
 
@@ -502,19 +511,18 @@ class AnalyzedDataReader(object):
                                    *cos(order*(temp_data[ipT::npT,3] - psi_r)))
                 vn_imag[ipT] += sum(temp_data[ipT::npT,2]
                                    *sin(order*(temp_data[ipT::npT,3] - psi_r)))
-                vn_real_err[ipT] += sum(
-                    temp_data[ipT::npT,2]*cos(
-                                    order*(temp_data[ipT::npT,3] - psi_r))**2.)
-                vn_imag_err[ipT] += sum(
-                    temp_data[ipT::npT,2]*sin(
-                                    order*(temp_data[ipT::npT,3] - psi_r))**2.)
+                vn_real_err[ipT] += sum((temp_data[ipT::npT,2]
+                              *cos(order*(temp_data[ipT::npT,3] - psi_r)))**2.)
+                vn_imag_err[ipT] += sum((temp_data[ipT::npT,2]
+                              *sin(order*(temp_data[ipT::npT,3] - psi_r)))**2.)
         vn_avg[:,0] = vn_avg[:,0]/totalN
         vn_real = vn_real/nev_pT
         vn_imag = vn_imag/nev_pT
         vn_real_err = sqrt(vn_real_err/nev_pT - vn_real**2)/sqrt(nev_pT)
         vn_imag_err = sqrt(vn_imag_err/nev_pT - vn_imag**2)/sqrt(nev_pT)
         vn_avg[:,1] = sqrt(vn_real**2. + vn_imag**2.)
-        vn_avg[:,2] = sqrt(vn_real_err**2. + vn_imag_err**2.)/vn_avg[:,1]
+        vn_avg[:,2] = (sqrt(
+            (vn_real*vn_real_err)**2. + (vn_imag*vn_imag_err)**2.)/vn_avg[:,1])
         
         #interpolate results to desired pT range
         vn_avg_interp = interp(pT_range, vn_avg[:,0], vn_avg[:,1])
@@ -606,7 +614,8 @@ class AnalyzedDataReader(object):
         vn_real_err = sqrt(vn_real_err/nev - vn_real**2)/sqrt(nev)
         vn_imag_err = sqrt(vn_imag_err/nev - vn_imag**2)/sqrt(nev)
         vn_avg[1] = sqrt(vn_real**2. + vn_imag**2.)
-        vn_avg[2] = sqrt(vn_real_err**2. + vn_imag_err**2.)/vn_avg[1]
+        vn_avg[2] = (sqrt(
+            (vn_real*vn_real_err)**2. + (vn_imag*vn_imag_err)**2.)/vn_avg[1])
         
         return vn_avg
 
