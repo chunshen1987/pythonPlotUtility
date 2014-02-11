@@ -222,7 +222,7 @@ class AnalyzedDataReader(object):
         dN_avg[:,0] = dN_avg[:,0]/dN_avg[:,1]
         dN_avg[:,1] = dN_avg[:,1]/self.tot_nev
         dN_avg[:,2] = (sqrt(dN_avg[:,2]/self.tot_nev - dN_avg[:,1]**2)
-                       /sqrt(self.tot_nev))
+                       /sqrt(self.tot_nev-1))
         
         #interpolate results to desired pT range
         dNdyinterp = exp(interp(pT_range, dN_avg[:,0], log(dN_avg[:,1]+eps)))
@@ -289,7 +289,7 @@ class AnalyzedDataReader(object):
         dN_avg[:,0] = dN_avg[:,0]/dN_avg[:,1]
         dN_avg[:,1] = dN_avg[:,1]/self.tot_nev
         dN_avg[:,2] = (sqrt(dN_avg[:,2]/self.tot_nev - dN_avg[:,1]**2)
-                       /sqrt(self.tot_nev))
+                       /sqrt(self.tot_nev-1))
         
         #interpolate results to desired rap range
         dNdyinterp = interp(rap_range, dN_avg[:,0], dN_avg[:,1])
@@ -359,7 +359,7 @@ class AnalyzedDataReader(object):
         particle_yield = particle_yield/self.tot_nev*drap
         particle_yield_err = (
             sqrt(particle_yield_err/self.tot_nev - particle_yield**2)
-            /sqrt(self.tot_nev))*drap
+            /sqrt(self.tot_nev-1))*drap
         return(mean_rap, particle_yield, particle_yield_err)
 
     ###########################################################################
@@ -430,7 +430,7 @@ class AnalyzedDataReader(object):
         dN_avg[:,0] = dN_avg[:,0]/(dN_avg[:,1] + eps)
         dN_avg[:,1] = dN_avg[:,1]/self.tot_nev
         dN_avg[:,2] = (sqrt(dN_avg[:,2]/self.tot_nev - dN_avg[:,1]**2)
-                       /sqrt(self.tot_nev))
+                       /sqrt(self.tot_nev-1))
         
         # delete zero components for interpolation
         idx = [] 
@@ -518,8 +518,8 @@ class AnalyzedDataReader(object):
         vn_avg[:,0] = vn_avg[:,0]/totalN
         vn_real = vn_real/nev_pT
         vn_imag = vn_imag/nev_pT
-        vn_real_err = sqrt(vn_real_err/nev_pT - vn_real**2)/sqrt(nev_pT)
-        vn_imag_err = sqrt(vn_imag_err/nev_pT - vn_imag**2)/sqrt(nev_pT)
+        vn_real_err = sqrt(vn_real_err/nev_pT - vn_real**2)/sqrt(nev_pT-1)
+        vn_imag_err = sqrt(vn_imag_err/nev_pT - vn_imag**2)/sqrt(nev_pT-1)
         vn_avg[:,1] = sqrt(vn_real**2. + vn_imag**2.)
         vn_avg[:,2] = (sqrt(
             (vn_real*vn_real_err)**2. + (vn_imag*vn_imag_err)**2.)/vn_avg[:,1])
@@ -611,8 +611,8 @@ class AnalyzedDataReader(object):
         vn_avg[0] = vn_avg[0]/totalN
         vn_real = vn_real/nev
         vn_imag = vn_imag/nev
-        vn_real_err = sqrt(vn_real_err/nev - vn_real**2)/sqrt(nev)
-        vn_imag_err = sqrt(vn_imag_err/nev - vn_imag**2)/sqrt(nev)
+        vn_real_err = sqrt(vn_real_err/nev - vn_real**2)/sqrt(nev-1)
+        vn_imag_err = sqrt(vn_imag_err/nev - vn_imag**2)/sqrt(nev-1)
         vn_avg[1] = sqrt(vn_real**2. + vn_imag**2.)
         vn_avg[2] = (sqrt(
             (vn_real*vn_real_err)**2. + (vn_imag*vn_imag_err)**2.)/vn_avg[1])
