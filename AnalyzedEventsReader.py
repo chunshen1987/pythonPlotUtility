@@ -76,14 +76,42 @@ class AnalyzedDataReader(object):
             self.hydro_nev = self.db.executeSQLquery(
                 "select Nev_hydro from number_of_events").fetchall()[0][0]
 
-        if self.db.createTableIfNotExists(
+        temp_flag = self.db.createTableIfNotExists(
             "UrQMD_NevList", (("hydroEventId", "integer"),
-                              ("Number_of_UrQMDevents", "integer"))):
-            for hydroEventId in range(1, self.hydroNev+1):
-                urqmd_nev = self.get_number_of_urqmd_events(hydroEventId)
+                              ("Number_of_UrQMDevents", "integer")))
+        urqmd_nev_array = zeros(self.hydro_nev)
+        for hydroEventId in range(1, self.hydro_nev+1):
+            urqmd_nev = self.get_number_of_urqmd_events(hydroEventId)
+            urqmd_nev_array[hydroEventId-1] = urqmd_nev
+            if temp_flag:
                 self.db.insertIntoTable("UrQMD_NevList",
                                         (int(hydroEventId), int(urqmd_nev)))
-            self.db._dbCon.commit()  # commit changes
+        self.db._dbCon.commit()  # commit changes
+
+        self.process_nev = 10000
+        #determine retrieve event boundaries
+        self.nev_bin = int(self.tot_nev/self.process_nev) + 2
+        if self.tot_nev % self.process_nev == 0: self.nev_bin -= 1
+        print(self.nev_bin)
+        self.event_bound_hydro = ones(self.nev_bin)
+        self.event_bound_urqmd = ones(self.nev_bin)
+        ihydro_ev = 1
+        ibin = 1
+        temp = urqmd_nev_array[0]
+        while ihydro_ev <= self.hydro_nev:
+            if temp > ibin*self.process_nev:
+                self.event_bound_hydro[ibin] = ihydro_ev
+                ibin += 1
+            else:
+                ihydro_ev += 1
+                if ihydro_ev < self.hydro_nev:
+                    temp += urqmd_nev_array[ihydro_ev-1]
+                else:
+                    self.event_bound_hydro[ibin] = ihydro_ev
+        for ibin in range(1,self.nev_bin):
+            self.event_bound_urqmd[ibin] = (ibin*self.process_nev 
+                - sum(urqmd_nev_array[0:self.event_bound_hydro[ibin]-1]))
+
     
     ###########################################################################
     # functions to get number of events
@@ -103,7 +131,7 @@ class AnalyzedDataReader(object):
         """
         nev = self.db.executeSQLquery(
             "select count(*) from (select distinct urqmd_event_id from "
-            "particle_pT_spectra where hydro_event_id = %d)" % hydroEventid
+            "particle_pT_spectra where hydro_event_id = %d)" % hydroeventid
         ).fetchall()[0][0]
         return nev
 
@@ -144,6 +172,7 @@ class AnalyzedDataReader(object):
             specified by the users.
             It returns (pT, dN/(dydpT), dN/(dydpT)_err)
         """
+        print("processing particle spectra for %s ... " % particle_name)
         eps = 1e-15
         pid = self.pid_lookup[particle_name]
         if rap_type == 'rapidity':
@@ -159,20 +188,37 @@ class AnalyzedDataReader(object):
             % (analyzed_table_name, 1, 1, pid)).fetchall())
 
         dN_avg = zeros([npT, 3])
-
         #fetch data
-        for hydroId in range(1, self.hydro_nev+1):
-            urqmd_nev = self.db.executeSQLquery(
-                "select Number_of_UrQMDevents from UrQMD_NevList where "
-                "hydroEventId = %d " % hydroId).fetchall()[0][0]
-            for urqmdId in range(1, urqmd_nev+1):
+        for ibin in range(1, self.nev_bin):
+            print("processing events %d to %d ..." 
+                % ((ibin-1)*self.process_nev, ibin*self.process_nev))
+            hydro_ev_bound_low = self.event_bound_hydro[ibin-1]
+            hydro_ev_bound_high = self.event_bound_hydro[ibin]
+            urqmd_ev_bound_low = self.event_bound_urqmd[ibin-1]
+            urqmd_ev_bound_high = self.event_bound_urqmd[ibin]
+            if hydro_ev_bound_low == hydro_ev_bound_high:
                 temp_data = array(self.db.executeSQLquery(
-                    "select pT, dN_dydpT from %s where hydro_event_id = %d "
-                    "and urqmd_event_id = %d and pid = %d" 
-                    % (analyzed_table_name, hydroId, urqmdId, pid)).fetchall())
-                dN_avg[:,0] += temp_data[:,0]*temp_data[:,1]
-                dN_avg[:,1] += temp_data[:,1]
-                dN_avg[:,2] += temp_data[:,1]**2
+                    "select pT, dN_dydpT from %s where pid = %d and "
+                    "hydro_event_id = %d and (%d <= urqmd_event_id "
+                    "and urqmd_event_id < %d)"
+                    % (analyzed_table_name, pid, hydro_ev_bound_low, 
+                       urqmd_ev_bound_low, urqmd_ev_bound_high)).fetchall())
+            else:
+                temp_data = array(self.db.executeSQLquery(
+                    "select pT, dN_dydpT from %s where pid = %d and "
+                    "((hydro_event_id = %d and urqmd_event_id >= %d) "
+                    " or (%d < hydro_event_id and hydro_event_id < %d) "
+                    " or (hydro_event_id = %d and urqmd_event_id < %d))"
+                    % (analyzed_table_name, pid, hydro_ev_bound_low, 
+                       urqmd_ev_bound_low, hydro_ev_bound_low, 
+                       hydro_ev_bound_high, hydro_ev_bound_high, 
+                       urqmd_ev_bound_high)).fetchall())
+            print(temp_data.shape)
+            for ipT in range(npT):
+                dN_avg[ipT,0] += (
+                    sum(temp_data[ipT::npT,0]*temp_data[ipT::npT,1]))
+                dN_avg[ipT,1] += sum(temp_data[ipT::npT,1])
+                dN_avg[ipT,2] += sum(temp_data[ipT::npT,1]**2)
         
         # calculate mean pT, <dN/dydpT>, and <dN/dydpT>_err 
         dN_avg[:,0] = dN_avg[:,0]/dN_avg[:,1]
@@ -362,6 +408,7 @@ class AnalyzedDataReader(object):
         vn_real_err = zeros(npT)
         vn_imag_err = zeros(npT)
         totalN = zeros(npT)
+        nev_pT = zeros(npT)
         #fetch data
         for hydroId in range(1, self.hydro_nev+1):
             urqmd_nev = self.db.executeSQLquery(
@@ -377,21 +424,24 @@ class AnalyzedDataReader(object):
                 
                 vn_avg[:,0] += temp_data[:,0]*temp_data[:,1] #<pT>
                 totalN += temp_data[:,1]
-                vn_real += (temp_data[:,1]*temp_data[:,2]
-                            *cos(order*(temp_data[:,3] - psi_r)))
-                vn_imag += (temp_data[:,1]*temp_data[:,2]
-                            *sin(order*(temp_data[:,3] - psi_r)))
-                vn_real_err += (temp_data[:,1]*temp_data[:,2]
-                                *cos(order*(temp_data[:,3] - psi_r)))**2.
-                vn_imag_err += (temp_data[:,1]*temp_data[:,2]
-                                *sin(order*(temp_data[:,3] - psi_r)))**2.
+                for ipT in range(npT):
+                    if(temp_data[ipT,1] > 0): 
+                        nev_pT[ipT] += 1
+                        vn_real[ipT] += (temp_data[ipT,2]
+                                        *cos(order*(temp_data[ipT,3] - psi_r)))
+                        vn_imag[ipT] += (temp_data[ipT,2]
+                                        *sin(order*(temp_data[ipT,3] - psi_r)))
+                        vn_real_err[ipT] += (
+                            temp_data[ipT,2]*cos(
+                                order*(temp_data[ipT,3] - psi_r)))**2.
+                        vn_imag_err[ipT] += (
+                            temp_data[ipT,2]*sin(
+                                order*(temp_data[ipT,3] - psi_r)))**2.
         vn_avg[:,0] = vn_avg[:,0]/totalN
-        vn_real = vn_real/totalN
-        vn_imag = vn_imag/totalN
-        vn_real_err = (sqrt(vn_real_err/totalN - vn_real**2)
-                       /sqrt(self.tot_nev))
-        vn_imag_err = (sqrt(vn_imag_err/totalN - vn_imag**2)
-                       /sqrt(self.tot_nev))
+        vn_real = vn_real/nev_pT
+        vn_imag = vn_imag/nev_pT
+        vn_real_err = sqrt(vn_real_err/nev_pT - vn_real**2)/sqrt(nev_pT)
+        vn_imag_err = sqrt(vn_imag_err/nev_pT - vn_imag**2)/sqrt(nev_pT)
         vn_avg[:,1] = sqrt(vn_real**2. + vn_imag**2.)
         vn_avg[:,2] = sqrt(vn_real_err**2. + vn_imag_err**2.)/vn_avg[:,1]
         
@@ -417,6 +467,7 @@ class AnalyzedDataReader(object):
         vn_real_err = 0.0
         vn_imag_err = 0.0
         totalN = 0
+        nev = 0
         #fetch data
         for hydroId in range(1, self.hydro_nev+1):
             urqmd_nev = self.db.executeSQLquery(
@@ -433,22 +484,27 @@ class AnalyzedDataReader(object):
                 ).fetchall())
                
                 vn_avg[0] += sum(temp_data[:,0]*temp_data[:,1]) #<pT>
-                totalN += sum(temp_data[:,1])
-                vn_real += sum(temp_data[:,1]*temp_data[:,2]
-                               *cos(order*(temp_data[:,3] - psi_r)))
-                vn_imag += sum(temp_data[:,1]*temp_data[:,2]
-                               *sin(order*(temp_data[:,3] - psi_r)))
-                vn_real_err += (sum(temp_data[:,1]*temp_data[:,2]
-                                    *cos(order*(temp_data[:,3] - psi_r))))**2.
-                vn_imag_err += (sum(temp_data[:,1]*temp_data[:,2]
-                                    *sin(order*(temp_data[:,3] - psi_r))))**2.
+                nparticle = sum(temp_data[:,1])
+                totalN += nparticle
+                if nparticle > 0:
+                    nev += 1
+                    vn_real += (sum(temp_data[:,1]*temp_data[:,2]
+                                    *cos(order*(temp_data[:,3] - psi_r)))
+                                    /nparticle)
+                    vn_imag += (sum(temp_data[:,1]*temp_data[:,2]
+                                    *sin(order*(temp_data[:,3] - psi_r)))
+                                    /nparticle)
+                    vn_real_err += ((sum(temp_data[:,1]*temp_data[:,2]
+                                     *cos(order*(temp_data[:,3] - psi_r))))**2.
+                                     /nparticle)
+                    vn_imag_err += ((sum(temp_data[:,1]*temp_data[:,2]
+                                     *sin(order*(temp_data[:,3] - psi_r))))**2.
+                                     /nparticle)
         vn_avg[0] = vn_avg[0]/totalN
-        vn_real = vn_real/totalN
-        vn_imag = vn_imag/totalN
-        vn_real_err = (sqrt(vn_real_err/totalN - vn_real**2)
-                       /sqrt(self.tot_nev))
-        vn_imag_err = (sqrt(vn_imag_err/totalN - vn_imag**2)
-                       /sqrt(self.tot_nev))
+        vn_real = vn_real/nev
+        vn_imag = vn_imag/nev
+        vn_real_err = sqrt(vn_real_err/totalN - vn_real**2)/sqrt(self.tot_nev)
+        vn_imag_err = sqrt(vn_imag_err/totalN - vn_imag**2)/sqrt(self.tot_nev)
         vn_avg[1] = sqrt(vn_real**2. + vn_imag**2.)
         vn_avg[2] = sqrt(vn_real_err**2. + vn_imag_err**2.)/vn_avg[1]
         
@@ -1241,15 +1297,15 @@ if __name__ == "__main__":
     if len(argv) < 2:
         printHelpMessageandQuit()
     test = AnalyzedDataReader(str(argv[1]))
-    #print(test.get_particle_spectra('pion_p', pT_range=linspace(0.1, 2.5, 20), rap_type = 'pseudorapidity'))
+    print(test.get_particle_spectra('pion_p', pT_range=linspace(0.1, 2.5, 20), rap_type = 'pseudorapidity'))
     #print(test.get_particle_yield_vs_rap('pion_p', rap_type = 'rapidity', rap_range=linspace(-1.0, 1.0, 15)))
     #print(test.get_particle_yield('pion_p', rap_type = 'rapidity', rap_range=(-0.5, 0.5)))
     #print(test.get_particle_yield_vs_spatial_variable('pion_p', 'tau', 
     #      linspace(0.6, 10, 50), rap_type = 'rapidity'))
-    print(test.get_avg_diffvn_flow('pion_p', 2, psi_r = 0., 
-          pT_range = linspace(0.0, 2.0, 21)))
-    print(test.get_avg_intevn_flow('pion_p', 2, psi_r = 0., 
-          pT_range = (0.3, 3.0)))
+   # print(test.get_avg_diffvn_flow('pion_p', 2, psi_r = 0., 
+   #       pT_range = linspace(0.0, 2.0, 21)))
+   # print(test.get_avg_intevn_flow('pion_p', 2, psi_r = 0., 
+   #       pT_range = (0.3, 3.0)))
     #print(test.getAvgintevnflowvsrap(particleName = "charged", psiR = 0., order = 2, rap_range = linspace(-2.0, 2.0, 20)))
     #print(test.getParticleintevn('charged'))
     #print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
