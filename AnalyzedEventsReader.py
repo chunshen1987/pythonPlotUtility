@@ -606,10 +606,10 @@ class AnalyzedDataReader(object):
                     /nparticle)
                 pTinte_Qn = sqrt(pTinte_Qn_x**2. + pTinte_Qn_y**2)
                 pTinte_Qn_psi  = arctan2(pTinte_Qn_y, pTinte_Qn_x)/order
-                temp_real = (sum(pTinte_Qn
-                                *cos(order*(pTinte_Qn_psi - psi_r)))/nparticle)
-                temp_imag = (sum(pTinte_Qn
-                                *sin(order*(pTinte_Qn_psi - psi_r)))/nparticle)
+                temp_real = (pTinte_Qn
+                             *cos(order*(pTinte_Qn_psi - psi_r)))
+                temp_imag = (pTinte_Qn
+                             *sin(order*(pTinte_Qn_psi - psi_r)))
                 vn_real += temp_real
                 vn_imag += temp_imag
                 vn_real_err += temp_real**2.
@@ -839,12 +839,10 @@ class AnalyzedDataReader(object):
                     /nparticle)
                 pTinte_Qn = sqrt(pTinte_Qn_x**2. + pTinte_Qn_y**2)
                 pTinte_Qn_psi  = arctan2(pTinte_Qn_y, pTinte_Qn_x)/order
-                temp_real = (sum(pTinte_Qn
-                                 *cos(order*(pTinte_Qn_psi - ref_data[iev,0])))
-                             /nparticle)
-                temp_imag = (sum(pTinte_Qn
-                                 *sin(order*(pTinte_Qn_psi - ref_data[iev,0])))
-                             /nparticle)
+                temp_real = (pTinte_Qn
+                             *cos(order*(pTinte_Qn_psi - ref_data[iev,0])))
+                temp_imag = (pTinte_Qn
+                             *sin(order*(pTinte_Qn_psi - ref_data[iev,0])))
                 vn_real += temp_real
                 vn_imag += temp_imag
                 vn_real_err += temp_real**2.
@@ -1081,12 +1079,10 @@ class AnalyzedDataReader(object):
                     /nparticle)
                 pTinte_Qn = sqrt(pTinte_Qn_x**2. + pTinte_Qn_y**2)
                 pTinte_Qn_psi  = arctan2(pTinte_Qn_y, pTinte_Qn_x)/order
-                temp_real = (sum(pTinte_Qn*ref_data[iev,0]
-                                 *cos(order*(pTinte_Qn_psi- ref_data[iev,1])))
-                             /nparticle)
-                temp_imag = (sum(pTinte_Qn*ref_data[iev,0]
-                                 *sin(order*(pTinte_Qn_psi- ref_data[iev,1])))
-                             /nparticle)
+                temp_real = (pTinte_Qn*ref_data[iev,0]
+                             *cos(order*(pTinte_Qn_psi- ref_data[iev,1])))
+                temp_imag = (pTinte_Qn*ref_data[iev,0]
+                             *sin(order*(pTinte_Qn_psi- ref_data[iev,1])))
                 vn_real += temp_real
                 vn_imag += temp_imag
                 vn_real_err += temp_real**2.
@@ -2064,6 +2060,9 @@ if __name__ == "__main__":
     if len(argv) < 2:
         printHelpMessageandQuit()
     test = AnalyzedDataReader(str(argv[1]))
+    print(test.get_avg_diffvn_flow('pion_p', 2, 
+        pT_range = linspace(0.0, 2.0, 21)))
+    print(test.get_avg_intevn_flow('pion_p', 2, pT_range = (0.3, 3.0)))
     print(test.get_event_plane_diffvn_flow('pion_p', 2, 
         pT_range = linspace(0.0, 2.0, 21)))
     print(test.get_event_plane_intevn_flow('pion_p', 2, pT_range = (0.3, 3.0)))
