@@ -502,19 +502,19 @@ class AnalyzedDataReader(object):
                        hydro_ev_bound_high, urqmd_ev_bound_high)
                 ).fetchall())
             for ipT in range(npT):
-                vn_avg[ipT,0] += sum(
-                    temp_data[ipT::npT,0]*temp_data[ipT::npT,1])
-                totalN[ipT] += sum(temp_data[ipT::npT,1])
-                nev_pT[ipT] += sum(
-                    temp_data[ipT::npT,1]/(temp_data[ipT::npT,1]+eps))
-                vn_real[ipT] += sum(temp_data[ipT::npT,2]
-                                   *cos(order*(temp_data[ipT::npT,3] - psi_r)))
-                vn_imag[ipT] += sum(temp_data[ipT::npT,2]
-                                   *sin(order*(temp_data[ipT::npT,3] - psi_r)))
-                vn_real_err[ipT] += sum((temp_data[ipT::npT,2]
-                              *cos(order*(temp_data[ipT::npT,3] - psi_r)))**2.)
-                vn_imag_err[ipT] += sum((temp_data[ipT::npT,2]
-                              *sin(order*(temp_data[ipT::npT,3] - psi_r)))**2.)
+                single_pT_data = temp_data[ipT::npT, :]
+                vn_avg[ipT,0] += sum(single_pT_data[:,0]*single_pT_data[:,1])
+                totalN[ipT] += sum(single_pT_data[:,1])
+
+                nev_pT[ipT] += len(single_pT_data[single_pT_data[:,1]>0,1])
+                temp_real = (single_pT_data[:,2]
+                             *cos(order*(single_pT_data[:,3] - psi_r)))
+                temp_imag = (single_pT_data[:,2]
+                             *sin(order*(single_pT_data[:,3] - psi_r)))
+                vn_real[ipT] += sum(temp_real)
+                vn_imag[ipT] += sum(temp_imag)
+                vn_real_err[ipT] += sum(temp_real**2.)
+                vn_imag_err[ipT] += sum(temp_imag**2.)
         vn_avg[:,0] = vn_avg[:,0]/totalN
         vn_real = vn_real/nev_pT
         vn_imag = vn_imag/nev_pT
@@ -593,17 +593,23 @@ class AnalyzedDataReader(object):
             totalN += sum(temp_data[:,1])
             temp_nev = int(len(temp_data[:,0])/npT)
             for iev in range(temp_nev):
-                nparticle = sum(temp_data[iev*npT:(iev+1)*npT,1])
+                ev_data = temp_data[iev*npT:(iev+1)*npT, :]
+                nparticle = sum(ev_data[:,1])
                 if nparticle == 0: continue
                 nev += 1
-                temp_real = (sum(temp_data[iev*npT:(iev+1)*npT,1]
-                                *temp_data[iev*npT:(iev+1)*npT,2]
-                                *cos(order*(temp_data[iev*npT:(iev+1)*npT,3] 
-                                            - psi_r)))/nparticle)
-                temp_imag = (sum(temp_data[iev*npT:(iev+1)*npT,1]
-                                *temp_data[iev*npT:(iev+1)*npT,2]
-                                *sin(order*(temp_data[iev*npT:(iev+1)*npT,3] 
-                                            - psi_r)))/nparticle)
+                # sum of pT bins to construct for pT integrated Qn
+                pTinte_Qn_x = (sum(
+                    ev_data[:,1]*ev_data[:,2]*cos(order*ev_data[:,3]))
+                    /nparticle)
+                pTinte_Qn_y = (sum(
+                    ev_data[:,1]*ev_data[:,2]*sin(order*ev_data[:,3]))
+                    /nparticle)
+                pTinte_Qn = sqrt(pTinte_Qn_x**2. + pTinte_Qn_y**2)
+                pTinte_Qn_psi  = arctan2(pTinte_Qn_y, pTinte_Qn_x)/order
+                temp_real = (sum(pTinte_Qn
+                                *cos(order*(pTinte_Qn_psi - psi_r)))/nparticle)
+                temp_imag = (sum(pTinte_Qn
+                                *sin(order*(pTinte_Qn_psi - psi_r)))/nparticle)
                 vn_real += temp_real
                 vn_imag += temp_imag
                 vn_real_err += temp_real**2.
@@ -698,21 +704,20 @@ class AnalyzedDataReader(object):
             resolutionFactor += sum(cos(order*(ref_data[:,0] - ref_data[:,1])))
             nev_resolution += len(ref_data[:,0])
             for ipT in range(npT):
-                vn_avg[ipT,0] += sum(
-                    temp_data[ipT::npT,0]*temp_data[ipT::npT,1])
-                totalN[ipT] += sum(temp_data[ipT::npT,1])
-                nev_pT[ipT] += sum(
-                    temp_data[ipT::npT,1]/(temp_data[ipT::npT,1]+eps))
-                vn_real[ipT] += sum(temp_data[ipT::npT,2]
-                                    *cos(order*(temp_data[ipT::npT,3] 
-                                                - ref_data[:,0])))
-                vn_imag[ipT] += sum(temp_data[ipT::npT,2]
-                                    *sin(order*(temp_data[ipT::npT,3] 
-                                                - ref_data[:,0])))
-                vn_real_err[ipT] += sum((temp_data[ipT::npT,2]
-                      *cos(order*(temp_data[ipT::npT,3] - ref_data[:,0])))**2.)
-                vn_imag_err[ipT] += sum((temp_data[ipT::npT,2]
-                      *sin(order*(temp_data[ipT::npT,3] - ref_data[:,0])))**2.)
+                single_pT_data = temp_data[ipT::npT, :]
+                vn_avg[ipT,0] += sum(single_pT_data[:,0]*single_pT_data[:,1])
+                totalN[ipT] += sum(single_pT_data[:,1])
+                
+                nev_pT[ipT] += len(single_pT_data[single_pT_data[:,1]>0,1])
+
+                temp_real = (single_pT_data[:,2]
+                             *cos(order*(single_pT_data[:,3] - ref_data[:,0])))
+                temp_imag = (single_pT_data[:,2]
+                             *sin(order*(single_pT_data[:,3] - ref_data[:,0])))
+                vn_real[ipT] += sum(temp_real)
+                vn_imag[ipT] += sum(temp_imag)
+                vn_real_err[ipT] += sum(temp_real**2.)
+                vn_imag_err[ipT] += sum(temp_imag**2.)
         resolutionFactor = sqrt(resolutionFactor/nev_resolution)
         vn_avg[:,0] = vn_avg[:,0]/totalN
         vn_real = vn_real/nev_pT
@@ -822,17 +827,24 @@ class AnalyzedDataReader(object):
             totalN += sum(temp_data[:,1])
             temp_nev = int(len(temp_data[:,0])/npT)
             for iev in range(temp_nev):
-                nparticle = sum(temp_data[iev*npT:(iev+1)*npT,1])
+                ev_data = temp_data[iev*npT:(iev+1)*npT, :]
+                nparticle = sum(ev_data[:,1])
                 if nparticle == 0: continue
                 nev += 1
-                temp_real = (sum(temp_data[iev*npT:(iev+1)*npT,1]
-                                *temp_data[iev*npT:(iev+1)*npT,2]
-                                *cos(order*(temp_data[iev*npT:(iev+1)*npT,3] 
-                                            - ref_data[iev,0])))/nparticle)
-                temp_imag = (sum(temp_data[iev*npT:(iev+1)*npT,1]
-                                *temp_data[iev*npT:(iev+1)*npT,2]
-                                *sin(order*(temp_data[iev*npT:(iev+1)*npT,3] 
-                                            - ref_data[iev,0])))/nparticle)
+                pTinte_Qn_x = (sum(
+                    ev_data[:,1]*ev_data[:,2]*cos(order*ev_data[:,3]))
+                    /nparticle)
+                pTinte_Qn_y = (sum(
+                    ev_data[:,1]*ev_data[:,2]*sin(order*ev_data[:,3]))
+                    /nparticle)
+                pTinte_Qn = sqrt(pTinte_Qn_x**2. + pTinte_Qn_y**2)
+                pTinte_Qn_psi  = arctan2(pTinte_Qn_y, pTinte_Qn_x)/order
+                temp_real = (sum(pTinte_Qn
+                                 *cos(order*(pTinte_Qn_psi - ref_data[iev,0])))
+                             /nparticle)
+                temp_imag = (sum(pTinte_Qn
+                                 *sin(order*(pTinte_Qn_psi - ref_data[iev,0])))
+                             /nparticle)
                 vn_real += temp_real
                 vn_imag += temp_imag
                 vn_real_err += temp_real**2.
@@ -931,21 +943,20 @@ class AnalyzedDataReader(object):
                              *cos(order*(ref_data[:,1] - ref_data[:,3])))
             nev_vn_ch += len(ref_data[:,0])
             for ipT in range(npT):
-                vn_avg[ipT,0] += sum(
-                    temp_data[ipT::npT,0]*temp_data[ipT::npT,1])
-                totalN[ipT] += sum(temp_data[ipT::npT,1])
-                nev_pT[ipT] += sum(
-                    temp_data[ipT::npT,1]/(temp_data[ipT::npT,1]+eps))
-                vn_real[ipT] += sum(temp_data[ipT::npT,2]*ref_data[:,0]
-                                    *cos(order*(temp_data[ipT::npT,3] 
-                                                - ref_data[:,1])))
-                vn_imag[ipT] += sum(temp_data[ipT::npT,2]*ref_data[:,0]
-                                    *sin(order*(temp_data[ipT::npT,3] 
-                                                - ref_data[:,1])))
-                vn_real_err[ipT] += sum((temp_data[ipT::npT,2]*ref_data[:,0]
-                      *cos(order*(temp_data[ipT::npT,3] - ref_data[:,1])))**2.)
-                vn_imag_err[ipT] += sum((temp_data[ipT::npT,2]*ref_data[:,0]
-                      *sin(order*(temp_data[ipT::npT,3] - ref_data[:,1])))**2.)
+                single_pT_data = temp_data[ipT::npT, :]
+                vn_avg[ipT,0] += sum(single_pT_data[:,0]*single_pT_data[:,1])
+                totalN[ipT] += sum(single_pT_data[:,1])
+
+                nev_pT[ipT] += len(single_pT_data[single_pT_data[:,1]>0,1])
+
+                temp_real = (single_pT_data[:,2]*ref_data[:,0]
+                             *cos(order*(single_pT_data[:,3] - ref_data[:,1])))
+                temp_imag = (single_pT_data[:,2]*ref_data[:,0]
+                             *sin(order*(single_pT_data[:,3] - ref_data[:,1])))
+                vn_real[ipT] += sum(temp_real)
+                vn_imag[ipT] += sum(temp_imag)
+                vn_real_err[ipT] += sum(temp_real**2.)
+                vn_imag_err[ipT] += sum(temp_imag**2.)
         vn_ch_rms = sqrt(vn_ch_rms/nev_vn_ch)
         vn_avg[:,0] = vn_avg[:,0]/totalN
         vn_real = vn_real/nev_pT
@@ -1057,17 +1068,25 @@ class AnalyzedDataReader(object):
             totalN += sum(temp_data[:,1])
             temp_nev = int(len(temp_data[:,0])/npT)
             for iev in range(temp_nev):
-                nparticle = sum(temp_data[iev*npT:(iev+1)*npT,1])
+                ev_data = temp_data[iev*npT:(iev+1)*npT, :]
+                nparticle = sum(ev_data[:,1])
                 if nparticle == 0: continue
                 nev += 1
-                temp_real = (sum(temp_data[iev*npT:(iev+1)*npT,1]
-                              *temp_data[iev*npT:(iev+1)*npT,2]*ref_data[iev,0]
-                              *cos(order*(temp_data[iev*npT:(iev+1)*npT,3] 
-                                          - ref_data[iev,1])))/nparticle)
-                temp_imag = (sum(temp_data[iev*npT:(iev+1)*npT,1]
-                              *temp_data[iev*npT:(iev+1)*npT,2]*ref_data[iev,1]
-                              *sin(order*(temp_data[iev*npT:(iev+1)*npT,3] 
-                                          - ref_data[iev,1])))/nparticle)
+                # sum of pT bins to construct for pT integrated Qn
+                pTinte_Qn_x = (sum(
+                    ev_data[:,1]*ev_data[:,2]*cos(order*ev_data[:,3]))
+                    /nparticle)
+                pTinte_Qn_y = (sum(
+                    ev_data[:,1]*ev_data[:,2]*sin(order*ev_data[:,3]))
+                    /nparticle)
+                pTinte_Qn = sqrt(pTinte_Qn_x**2. + pTinte_Qn_y**2)
+                pTinte_Qn_psi  = arctan2(pTinte_Qn_y, pTinte_Qn_x)/order
+                temp_real = (sum(pTinte_Qn*ref_data[iev,0]
+                                 *cos(order*(pTinte_Qn_psi- ref_data[iev,1])))
+                             /nparticle)
+                temp_imag = (sum(pTinte_Qn*ref_data[iev,0]
+                                 *sin(order*(pTinte_Qn_psi- ref_data[iev,1])))
+                             /nparticle)
                 vn_real += temp_real
                 vn_imag += temp_imag
                 vn_real_err += temp_real**2.
@@ -1085,6 +1104,175 @@ class AnalyzedDataReader(object):
                      /vn_avg[1]/vn_ch_rms)
         
         return (vn_avg, vn_ch_rms, vn_ch_rms_imag)
+
+    def get_diffvn_2pc_flow(
+        self, particle_name, order, pT_range=linspace(0.0, 3.0, 31)):
+        """
+            compute pT differential vn[2](pT)
+            the results are interpolated to desired pT points given by the user
+            Note: since both particles are taken from the same bin, one needs
+                  to subtract self-correlation when multiply Qn with its
+                  complex conjugate
+        """
+        print("collect pT differential vn[2](pT) of %s ..." % particle_name)
+        eps = 1e-15
+        pid = self.pid_lookup[particle_name]
+        analyzed_table_name_diff = 'flow_Qn_vectors_pTdiff'
+
+        npT = len(self.db.executeSQLquery(
+            "select pT from %s where hydro_event_id = %d and "
+            "urqmd_event_id = %d and pid = %d and weight_type = '1' and n = %d" 
+            % (analyzed_table_name_diff, 1, 1, pid, order)).fetchall())
+
+        vn_avg = zeros([npT, 3])
+        vn_real = zeros(npT)
+        vn_imag = zeros(npT)
+        vn_real_err = zeros(npT)
+        vn_imag_err = zeros(npT)
+        totalN = zeros(npT)
+        nev_pT = zeros(npT)
+
+        #fetch data
+        for ibin in range(1, self.nev_bin):
+            print("processing events %d to %d ..." 
+                % ((ibin-1)*self.process_nev, ibin*self.process_nev))
+            hydro_ev_bound_low = self.event_bound_hydro[ibin-1]
+            hydro_ev_bound_high = self.event_bound_hydro[ibin]
+            urqmd_ev_bound_low = self.event_bound_urqmd[ibin-1]
+            urqmd_ev_bound_high = self.event_bound_urqmd[ibin]
+            if hydro_ev_bound_low == hydro_ev_bound_high:
+                temp_data = array(self.db.executeSQLquery(
+                    "select pT, Nparticle, Qn from %s "
+                    "where pid = %d and weight_type = '1' and n = %d and "
+                    "hydro_event_id = %d and "
+                    "(%d <= urqmd_event_id and urqmd_event_id < %d)"
+                    % (analyzed_table_name_diff, pid, order, 
+                       hydro_ev_bound_low, urqmd_ev_bound_low, 
+                       urqmd_ev_bound_high)
+                ).fetchall())
+            else:
+                temp_data = array(self.db.executeSQLquery(
+                    "select pT, Nparticle, Qn from %s "
+                    "where pid = %d and weight_type = '1' and n = %d and "
+                    "((hydro_event_id = %d and urqmd_event_id >= %d) "
+                    " or (%d < hydro_event_id and hydro_event_id < %d) "
+                    " or (hydro_event_id = %d and urqmd_event_id < %d))"
+                    % (analyzed_table_name_diff, pid, order, 
+                       hydro_ev_bound_low, urqmd_ev_bound_low, 
+                       hydro_ev_bound_low, hydro_ev_bound_high, 
+                       hydro_ev_bound_high, urqmd_ev_bound_high)
+                ).fetchall())
+            for ipT in range(npT):
+                single_pT_data = temp_data[ipT::npT, :]
+                vn_avg[ipT,0] += sum(single_pT_data[:,0]*single_pT_data[:,1])
+                totalN[ipT] += sum(single_pT_data[:,1])
+
+                effective_ev = single_pT_data[single_pT_data[:,1]>1,1:3]
+                nev_pT[ipT] += len(effective_ev[:,0])
+                temp_array = ((effective_ev[:,0]*effective_ev[:,1]**2 - 1.)
+                              /(effective_ev[:,0] - 1))
+                vn_real[ipT] += sum(temp_array)
+                vn_real_err[ipT] += sum(temp_array**2.)
+        
+        vn_avg[:,0] = vn_avg[:,0]/totalN
+        vn_real = vn_real/nev_pT
+        vn_real_err = sqrt(vn_real_err/nev_pT - vn_real**2)/sqrt(nev_pT-1)
+        vn_avg[:,1] = sqrt(vn_real)
+        vn_avg[:,2] = vn_real_err/2./sqrt(vn_real)
+        
+        #interpolate results to desired pT range
+        vn_avg_interp = interp(pT_range, vn_avg[:,0], vn_avg[:,1])
+        vn_avg_interp_err = interp(pT_range, vn_avg[:,0], vn_avg[:,2])
+        results = array([pT_range, vn_avg_interp, vn_avg_interp_err])
+        return transpose(results)
+        
+    def get_intevn_2pc_flow(
+        self, particle_name, order, pT_range=(0.0, 3.0)):
+        """
+            compute pT integrated event plane vn[2] averaged over 
+            all events the pT integrated range is given by the user
+        """
+        print("collect pT integraged vn[2] of %s, pT range from (%g, %g) GeV" 
+              % (particle_name, pT_range[0], pT_range[1]))
+        pid = self.pid_lookup[particle_name]
+        analyzed_table_name_diff = 'flow_Qn_vectors_pTdiff'
+
+        vn_avg = zeros(3)
+        vn_real = 0.0
+        vn_imag = 0.0
+        vn_real_err = 0.0
+        vn_imag_err = 0.0
+        totalN = 0
+        nev = 0
+        
+        npT = len(self.db.executeSQLquery(
+            "select pT from %s where hydro_event_id = %d and "
+            "urqmd_event_id = %d and pid = %d and weight_type = '1' and "
+            "n = %d and (%g <= pT and pT <= %g)" 
+            % (analyzed_table_name_diff, 1, 1, pid, order, pT_range[0], 
+               pT_range[1])
+        ).fetchall())
+
+        #fetch data
+        for ibin in range(1, self.nev_bin):
+            print("processing events %d to %d ..." 
+                % ((ibin-1)*self.process_nev, ibin*self.process_nev))
+            hydro_ev_bound_low = self.event_bound_hydro[ibin-1]
+            hydro_ev_bound_high = self.event_bound_hydro[ibin]
+            urqmd_ev_bound_low = self.event_bound_urqmd[ibin-1]
+            urqmd_ev_bound_high = self.event_bound_urqmd[ibin]
+            if hydro_ev_bound_low == hydro_ev_bound_high:
+                temp_data = array(self.db.executeSQLquery(
+                    "select pT, Nparticle, Qn, Qn_psi  from %s "
+                    "where pid = %d and weight_type = '1' and n = %d and "
+                    "hydro_event_id = %d and "
+                    "(%d <= urqmd_event_id and urqmd_event_id < %d) and "
+                    "(%g <= pT and pT <= %g)"
+                    % (analyzed_table_name_diff, pid, order, 
+                       hydro_ev_bound_low, urqmd_ev_bound_low, 
+                       urqmd_ev_bound_high, pT_range[0], pT_range[1])
+                ).fetchall())
+            else:
+                temp_data = array(self.db.executeSQLquery(
+                    "select pT, Nparticle, Qn, Qn_psi from %s "
+                    "where pid = %d and weight_type = '1' and n = %d and "
+                    "((hydro_event_id = %d and urqmd_event_id >= %d) "
+                    " or (%d < hydro_event_id and hydro_event_id < %d) "
+                    " or (hydro_event_id = %d and urqmd_event_id < %d)) and "
+                    "(%g <= pT and pT <= %g)"
+                    % (analyzed_table_name_diff, pid, order,
+                       hydro_ev_bound_low, urqmd_ev_bound_low, 
+                       hydro_ev_bound_low, hydro_ev_bound_high, 
+                       hydro_ev_bound_high, urqmd_ev_bound_high,
+                       pT_range[0], pT_range[1])
+                ).fetchall())
+            vn_avg[0] += sum(temp_data[:,0]*temp_data[:,1]) #<pT>
+            totalN += sum(temp_data[:,1])
+            temp_nev = int(len(temp_data[:,0])/npT)
+            for iev in range(temp_nev):
+                ev_data = temp_data[iev*npT:(iev+1)*npT, :]
+                nparticle = sum(ev_data[:,1])
+                if nparticle <= 1: continue
+                nev += 1
+                pTinte_Qn_x = (sum(
+                    ev_data[:,1]*ev_data[:,2]*cos(order*ev_data[:,3]))
+                    /nparticle)
+                pTinte_Qn_y = (sum(
+                    ev_data[:,1]*ev_data[:,2]*sin(order*ev_data[:,3]))
+                    /nparticle)
+                
+                temp_real = (
+                    (nparticle*(pTinte_Qn_x**2 + pTinte_Qn_y**2) - 1)
+                    /(nparticle - 1))
+                vn_real += temp_real
+                vn_real_err += temp_real**2.
+        vn_avg[0] = vn_avg[0]/totalN
+        vn_real = vn_real/nev
+        vn_real_err = sqrt(vn_real_err/nev - vn_real**2)/sqrt(nev-1)
+        vn_avg[1] = sqrt(vn_real)
+        vn_avg[2] = vn_real_err/2./sqrt(vn_real)
+        
+        return (vn_avg)
 
 #    def getFullplaneResolutionFactor(self, resolutionFactor_sub, Nfactor):
 #        """
@@ -1882,6 +2070,9 @@ if __name__ == "__main__":
     print(test.get_scalar_product_diffvn_flow('pion_p', 2, 
         pT_range = linspace(0.0, 2.0, 21)))
     print(test.get_scalar_product_intevn_flow('pion_p', 2, pT_range = (0.3, 3.0)))
+    print(test.get_diffvn_2pc_flow('pion_p', 2, 
+        pT_range = linspace(0.0, 2.0, 21)))
+    print(test.get_intevn_2pc_flow('pion_p', 2, pT_range = (0.3, 3.0)))
     #print(test.get_particle_spectra('pion_p', pT_range=linspace(0.1, 2.5, 20), rap_type = 'pseudorapidity'))
     #print(test.get_particle_yield_vs_rap('pion_p', rap_type = 'rapidity', rap_range=linspace(-1.0, 1.0, 15)))
     #print(test.get_particle_yield('pion_p', rap_type = 'rapidity', rap_range=(-0.5, 0.5)))
