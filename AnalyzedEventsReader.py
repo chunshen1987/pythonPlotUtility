@@ -238,6 +238,8 @@ class AnalyzedDataReader(object):
             or pseudorapidity. The range is specified by the user.
             It returns (rap, dN/(drap), dN/(drap)_err)
         """
+        print("get %s dependence of particle yield for %s" 
+              % (rap_type, particle_name))
         pid = self.pid_lookup[particle_name]
         if rap_type == 'rapidity':
             analyzed_table_name = 'particle_yield_vs_rap'
@@ -302,6 +304,7 @@ class AnalyzedDataReader(object):
             "particle_name" within the given rapidity or pseudorapidity 
             range by users
         """
+        print("get particle yield for %s" % particle_name)
         pid = self.pid_lookup[particle_name]
         if rap_type == 'rapidity':
             analyzed_table_name = 'particle_yield_vs_rap'
@@ -370,6 +373,7 @@ class AnalyzedDataReader(object):
             desired sv values specified by the users.
             It returns (sv, dN/(dsv), dN/(dsv)_err)
         """
+        print("get dN/d%s for %s" % (sv_type, particle_name))
         eps = 1e-15
         pid = self.pid_lookup[particle_name]
         if rap_type == 'rapidity':
@@ -444,6 +448,7 @@ class AnalyzedDataReader(object):
             the results to desired pT points given by the user
         """
         print("collect averaged diff vn flow of %s ..." % particle_name)
+        eps = 1e-15
         pid = self.pid_lookup[particle_name]
         analyzed_table_name = 'flow_Qn_vectors_pTdiff'
         npT = len(self.db.executeSQLquery(
@@ -459,33 +464,50 @@ class AnalyzedDataReader(object):
         totalN = zeros(npT)
         nev_pT = zeros(npT)
         #fetch data
-        for hydroId in range(1, self.hydro_nev+1):
-            urqmd_nev = self.db.executeSQLquery(
-                "select Number_of_UrQMDevents from UrQMD_NevList where "
-                "hydroEventId = %d " % hydroId).fetchall()[0][0]
-            for urqmdId in range(1, urqmd_nev+1):
+        for ibin in range(1, self.nev_bin):
+            print("processing events %d to %d ..." 
+                % ((ibin-1)*self.process_nev, ibin*self.process_nev))
+            hydro_ev_bound_low = self.event_bound_hydro[ibin-1]
+            hydro_ev_bound_high = self.event_bound_hydro[ibin]
+            urqmd_ev_bound_low = self.event_bound_urqmd[ibin-1]
+            urqmd_ev_bound_high = self.event_bound_urqmd[ibin]
+            if hydro_ev_bound_low == hydro_ev_bound_high:
+                temp_data = array(self.db.executeSQLquery(
+                    "select pT, Nparticle, Qn, Qn_psi  from %s "
+                    "where pid = %d and weight_type = '1' and n = %d and "
+                    "hydro_event_id = %d and "
+                    "(%d <= urqmd_event_id and urqmd_event_id < %d)"
+                    % (analyzed_table_name, pid, order, hydro_ev_bound_low, 
+                       urqmd_ev_bound_low, urqmd_ev_bound_high)
+                ).fetchall())
+            else:
                 temp_data = array(self.db.executeSQLquery(
                     "select pT, Nparticle, Qn, Qn_psi from %s "
-                    "where hydro_event_id = %d and urqmd_event_id = %d and "
-                    "pid = %d and weight_type = '1' and n = %d" 
-                    % (analyzed_table_name, hydroId, urqmdId, pid, order)
+                    "where pid = %d and weight_type = '1' and n = %d and "
+                    "((hydro_event_id = %d and urqmd_event_id >= %d) "
+                    " or (%d < hydro_event_id and hydro_event_id < %d) "
+                    " or (hydro_event_id = %d and urqmd_event_id < %d))"
+                    % (analyzed_table_name, pid, order, 
+                       hydro_ev_bound_low, urqmd_ev_bound_low, 
+                       hydro_ev_bound_low, hydro_ev_bound_high, 
+                       hydro_ev_bound_high, urqmd_ev_bound_high)
                 ).fetchall())
-                
-                vn_avg[:,0] += temp_data[:,0]*temp_data[:,1] #<pT>
-                totalN += temp_data[:,1]
-                for ipT in range(npT):
-                    if(temp_data[ipT,1] > 0): 
-                        nev_pT[ipT] += 1
-                        vn_real[ipT] += (temp_data[ipT,2]
-                                        *cos(order*(temp_data[ipT,3] - psi_r)))
-                        vn_imag[ipT] += (temp_data[ipT,2]
-                                        *sin(order*(temp_data[ipT,3] - psi_r)))
-                        vn_real_err[ipT] += (
-                            temp_data[ipT,2]*cos(
-                                order*(temp_data[ipT,3] - psi_r)))**2.
-                        vn_imag_err[ipT] += (
-                            temp_data[ipT,2]*sin(
-                                order*(temp_data[ipT,3] - psi_r)))**2.
+            for ipT in range(npT):
+                vn_avg[ipT,0] += sum(
+                    temp_data[ipT::npT,0]*temp_data[ipT::npT,1])
+                totalN[ipT] += sum(temp_data[ipT::npT,1])
+                nev_pT[ipT] += sum(
+                    temp_data[ipT::npT,1]/(temp_data[ipT::npT,1]+eps))
+                vn_real[ipT] += sum(temp_data[ipT::npT,2]
+                                   *cos(order*(temp_data[ipT::npT,3] - psi_r)))
+                vn_imag[ipT] += sum(temp_data[ipT::npT,2]
+                                   *sin(order*(temp_data[ipT::npT,3] - psi_r)))
+                vn_real_err[ipT] += sum(
+                    temp_data[ipT::npT,2]*cos(
+                                    order*(temp_data[ipT::npT,3] - psi_r))**2.)
+                vn_imag_err[ipT] += sum(
+                    temp_data[ipT::npT,2]*sin(
+                                    order*(temp_data[ipT::npT,3] - psi_r))**2.)
         vn_avg[:,0] = vn_avg[:,0]/totalN
         vn_real = vn_real/nev_pT
         vn_imag = vn_imag/nev_pT
@@ -517,43 +539,72 @@ class AnalyzedDataReader(object):
         vn_imag_err = 0.0
         totalN = 0
         nev = 0
+
+        npT = len(self.db.executeSQLquery(
+            "select pT from %s where hydro_event_id = %d and "
+            "urqmd_event_id = %d and pid = %d and weight_type = '1' and "
+            "n = %d and (%g <= pT and pT <= %g)" 
+            % (analyzed_table_name, 1, 1, pid, order, pT_range[0], 
+               pT_range[1])
+        ).fetchall())
+
         #fetch data
-        for hydroId in range(1, self.hydro_nev+1):
-            urqmd_nev = self.db.executeSQLquery(
-                "select Number_of_UrQMDevents from UrQMD_NevList where "
-                "hydroEventId = %d " % hydroId).fetchall()[0][0]
-            for urqmdId in range(1, urqmd_nev+1):
+        for ibin in range(1, self.nev_bin):
+            print("processing events %d to %d ..." 
+                % ((ibin-1)*self.process_nev, ibin*self.process_nev))
+            hydro_ev_bound_low = self.event_bound_hydro[ibin-1]
+            hydro_ev_bound_high = self.event_bound_hydro[ibin]
+            urqmd_ev_bound_low = self.event_bound_urqmd[ibin-1]
+            urqmd_ev_bound_high = self.event_bound_urqmd[ibin]
+            if hydro_ev_bound_low == hydro_ev_bound_high:
                 temp_data = array(self.db.executeSQLquery(
-                    "select pT, Nparticle, Qn, Qn_psi from %s "
-                    "where hydro_event_id = %d and urqmd_event_id = %d and "
-                    "pid = %d and weight_type = '1' and n = %d and "
+                    "select pT, Nparticle, Qn, Qn_psi  from %s "
+                    "where pid = %d and weight_type = '1' and n = %d and "
+                    "hydro_event_id = %d and "
+                    "(%d <= urqmd_event_id and urqmd_event_id < %d) and "
                     "(%g <= pT and pT <= %g)"
-                    % (analyzed_table_name, hydroId, urqmdId, pid, order,
+                    % (analyzed_table_name, pid, order, hydro_ev_bound_low, 
+                       urqmd_ev_bound_low, urqmd_ev_bound_high,
                        pT_range[0], pT_range[1])
                 ).fetchall())
-               
-                vn_avg[0] += sum(temp_data[:,0]*temp_data[:,1]) #<pT>
-                nparticle = sum(temp_data[:,1])
-                totalN += nparticle
-                if nparticle > 0:
-                    nev += 1
-                    vn_real += (sum(temp_data[:,1]*temp_data[:,2]
-                                    *cos(order*(temp_data[:,3] - psi_r)))
-                                    /nparticle)
-                    vn_imag += (sum(temp_data[:,1]*temp_data[:,2]
-                                    *sin(order*(temp_data[:,3] - psi_r)))
-                                    /nparticle)
-                    vn_real_err += ((sum(temp_data[:,1]*temp_data[:,2]
-                                     *cos(order*(temp_data[:,3] - psi_r))))**2.
-                                     /nparticle)
-                    vn_imag_err += ((sum(temp_data[:,1]*temp_data[:,2]
-                                     *sin(order*(temp_data[:,3] - psi_r))))**2.
-                                     /nparticle)
+            else:
+                temp_data = array(self.db.executeSQLquery(
+                    "select pT, Nparticle, Qn, Qn_psi from %s "
+                    "where pid = %d and weight_type = '1' and n = %d and "
+                    "((hydro_event_id = %d and urqmd_event_id >= %d) "
+                    " or (%d < hydro_event_id and hydro_event_id < %d) "
+                    " or (hydro_event_id = %d and urqmd_event_id < %d)) and "
+                    "(%g <= pT and pT <= %g)"
+                    % (analyzed_table_name, pid, order,
+                       hydro_ev_bound_low, urqmd_ev_bound_low, 
+                       hydro_ev_bound_low, hydro_ev_bound_high, 
+                       hydro_ev_bound_high, urqmd_ev_bound_high,
+                       pT_range[0], pT_range[1])
+                ).fetchall())
+            vn_avg[0] += sum(temp_data[:,0]*temp_data[:,1]) #<pT>
+            totalN += sum(temp_data[:,1])
+            temp_nev = int(len(temp_data[:,0])/npT)
+            for iev in range(temp_nev):
+                nparticle = sum(temp_data[iev*npT:(iev+1)*npT,1])
+                if nparticle == 0: continue
+                nev += 1
+                temp_real = (sum(temp_data[iev*npT:(iev+1)*npT,1]
+                                *temp_data[iev*npT:(iev+1)*npT,2]
+                                *cos(order*(temp_data[iev*npT:(iev+1)*npT,3] 
+                                            - psi_r)))/nparticle)
+                temp_imag = (sum(temp_data[iev*npT:(iev+1)*npT,1]
+                                *temp_data[iev*npT:(iev+1)*npT,2]
+                                *sin(order*(temp_data[iev*npT:(iev+1)*npT,3] 
+                                            - psi_r)))/nparticle)
+                vn_real += temp_real
+                vn_imag += temp_imag
+                vn_real_err += temp_real**2.
+                vn_imag_err += temp_imag**2.
         vn_avg[0] = vn_avg[0]/totalN
         vn_real = vn_real/nev
         vn_imag = vn_imag/nev
-        vn_real_err = sqrt(vn_real_err/totalN - vn_real**2)/sqrt(self.tot_nev)
-        vn_imag_err = sqrt(vn_imag_err/totalN - vn_imag**2)/sqrt(self.tot_nev)
+        vn_real_err = sqrt(vn_real_err/nev - vn_real**2)/sqrt(nev)
+        vn_imag_err = sqrt(vn_imag_err/nev - vn_imag**2)/sqrt(nev)
         vn_avg[1] = sqrt(vn_real**2. + vn_imag**2.)
         vn_avg[2] = sqrt(vn_real_err**2. + vn_imag_err**2.)/vn_avg[1]
         
@@ -1351,10 +1402,10 @@ if __name__ == "__main__":
     print(test.get_particle_yield('pion_p', rap_type = 'rapidity', rap_range=(-0.5, 0.5)))
     print(test.get_particle_yield_vs_spatial_variable('pion_p', 'tau', 
           linspace(0.6, 10, 50), rap_type = 'rapidity'))
-   # print(test.get_avg_diffvn_flow('pion_p', 2, psi_r = 0., 
-   #       pT_range = linspace(0.0, 2.0, 21)))
-   # print(test.get_avg_intevn_flow('pion_p', 2, psi_r = 0., 
-   #       pT_range = (0.3, 3.0)))
+    print(test.get_avg_diffvn_flow('pion_p', 2, psi_r = 0., 
+          pT_range = linspace(0.0, 2.0, 21)))
+    print(test.get_avg_intevn_flow('pion_p', 2, psi_r = 0., 
+          pT_range = (0.3, 3.0)))
     #print(test.getAvgintevnflowvsrap(particleName = "charged", psiR = 0., order = 2, rap_range = linspace(-2.0, 2.0, 20)))
     #print(test.getParticleintevn('charged'))
     #print(test.getParticleSpectrum('charged', pT_range = linspace(0,3,31)))
