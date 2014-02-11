@@ -92,7 +92,6 @@ class AnalyzedDataReader(object):
         #determine retrieve event boundaries
         self.nev_bin = int(self.tot_nev/self.process_nev) + 2
         if self.tot_nev % self.process_nev == 0: self.nev_bin -= 1
-        print(self.nev_bin)
         self.event_bound_hydro = ones(self.nev_bin)
         self.event_bound_urqmd = ones(self.nev_bin)
         ihydro_ev = 1
@@ -213,7 +212,6 @@ class AnalyzedDataReader(object):
                        urqmd_ev_bound_low, hydro_ev_bound_low, 
                        hydro_ev_bound_high, hydro_ev_bound_high, 
                        urqmd_ev_bound_high)).fetchall())
-            print(temp_data.shape)
             for ipT in range(npT):
                 dN_avg[ipT,0] += (
                     sum(temp_data[ipT::npT,0]*temp_data[ipT::npT,1]))
@@ -254,20 +252,36 @@ class AnalyzedDataReader(object):
             % (analyzed_table_name, 1, 1, pid)).fetchall())
         
         dN_avg = zeros([nrap, 3])
-        
         #fetch data
-        for hydroId in range(1, self.hydro_nev+1):
-            urqmd_nev = self.db.executeSQLquery(
-                "select Number_of_UrQMDevents from UrQMD_NevList where "
-                "hydroEventId = %d " % hydroId).fetchall()[0][0]
-            for urqmdId in range(1, urqmd_nev+1):
+        for ibin in range(1, self.nev_bin):
+            print("processing events %d to %d ..." 
+                % ((ibin-1)*self.process_nev, ibin*self.process_nev))
+            hydro_ev_bound_low = self.event_bound_hydro[ibin-1]
+            hydro_ev_bound_high = self.event_bound_hydro[ibin]
+            urqmd_ev_bound_low = self.event_bound_urqmd[ibin-1]
+            urqmd_ev_bound_high = self.event_bound_urqmd[ibin]
+            if hydro_ev_bound_low == hydro_ev_bound_high:
                 temp_data = array(self.db.executeSQLquery(
-                    "select rap, dN_drap from %s where hydro_event_id = %d "
-                    "and urqmd_event_id = %d and pid = %d" 
-                    % (analyzed_table_name, hydroId, urqmdId, pid)).fetchall())
-                dN_avg[:,0] += temp_data[:,0]*temp_data[:,1]
-                dN_avg[:,1] += temp_data[:,1]
-                dN_avg[:,2] += temp_data[:,1]**2
+                    "select rap, dN_drap from %s where pid = %d and "
+                    "hydro_event_id = %d and (%d <= urqmd_event_id "
+                    "and urqmd_event_id < %d)"
+                    % (analyzed_table_name, pid, hydro_ev_bound_low, 
+                       urqmd_ev_bound_low, urqmd_ev_bound_high)).fetchall())
+            else:
+                temp_data = array(self.db.executeSQLquery(
+                    "select rap, dN_drap from %s where pid = %d and "
+                    "((hydro_event_id = %d and urqmd_event_id >= %d) "
+                    " or (%d < hydro_event_id and hydro_event_id < %d) "
+                    " or (hydro_event_id = %d and urqmd_event_id < %d))"
+                    % (analyzed_table_name, pid, hydro_ev_bound_low, 
+                       urqmd_ev_bound_low, hydro_ev_bound_low, 
+                       hydro_ev_bound_high, hydro_ev_bound_high, 
+                       urqmd_ev_bound_high)).fetchall())
+            for irap in range(nrap):
+                dN_avg[irap,0] += sum(
+                    temp_data[irap::nrap,0]*temp_data[irap::nrap,1])
+                dN_avg[irap,1] += sum(temp_data[irap::nrap,1])
+                dN_avg[irap,2] += sum(temp_data[irap::nrap,1]**2)
 
         # calculate mean rap, <dN/drap>, and <dN/drap>_err 
         dN_avg[:,0] = dN_avg[:,0]/dN_avg[:,1]
@@ -307,20 +321,35 @@ class AnalyzedDataReader(object):
         particle_yield_err = 0.0
         
         #fetch data
-        for hydroId in range(1, self.hydro_nev+1):
-            urqmd_nev = self.db.executeSQLquery(
-                "select Number_of_UrQMDevents from UrQMD_NevList where "
-                "hydroEventId = %d " % hydroId).fetchall()[0][0]
-            for urqmdId in range(1, urqmd_nev+1):
+        for ibin in range(1, self.nev_bin):
+            print("processing events %d to %d ..." 
+                % ((ibin-1)*self.process_nev, ibin*self.process_nev))
+            hydro_ev_bound_low = self.event_bound_hydro[ibin-1]
+            hydro_ev_bound_high = self.event_bound_hydro[ibin]
+            urqmd_ev_bound_low = self.event_bound_urqmd[ibin-1]
+            urqmd_ev_bound_high = self.event_bound_urqmd[ibin]
+            if hydro_ev_bound_low == hydro_ev_bound_high:
                 temp_data = array(self.db.executeSQLquery(
-                    "select rap, dN_drap from %s where hydro_event_id = %d "
-                    "and urqmd_event_id = %d and pid = %d" 
-                    % (analyzed_table_name, hydroId, urqmdId, pid)).fetchall())
-                cut_data = temp_data[temp_data[:,0] > rap_range[0],:]
-                cut_data2 = cut_data[cut_data[:,0] < rap_range[1],:]
-                mean_rap += sum(cut_data2[:,0]*cut_data2[:,1])
-                particle_yield += sum(cut_data2[:,1])
-                particle_yield_err += sum(cut_data2[:,1])**2
+                    "select rap, dN_drap from %s where pid = %d and "
+                    "hydro_event_id = %d and (%d <= urqmd_event_id "
+                    "and urqmd_event_id < %d)"
+                    % (analyzed_table_name, pid, hydro_ev_bound_low, 
+                       urqmd_ev_bound_low, urqmd_ev_bound_high)).fetchall())
+            else:
+                temp_data = array(self.db.executeSQLquery(
+                    "select rap, dN_drap from %s where pid = %d and "
+                    "((hydro_event_id = %d and urqmd_event_id >= %d) "
+                    " or (%d < hydro_event_id and hydro_event_id < %d) "
+                    " or (hydro_event_id = %d and urqmd_event_id < %d))"
+                    % (analyzed_table_name, pid, hydro_ev_bound_low, 
+                       urqmd_ev_bound_low, hydro_ev_bound_low, 
+                       hydro_ev_bound_high, hydro_ev_bound_high, 
+                       urqmd_ev_bound_high)).fetchall())
+            cut_data = temp_data[temp_data[:,0] > rap_range[0],:]
+            cut_data2 = cut_data[cut_data[:,0] < rap_range[1],:]
+            mean_rap += sum(cut_data2[:,0]*cut_data2[:,1])
+            particle_yield += sum(cut_data2[:,1])
+            particle_yield_err += sum(cut_data2[:,1]**2)
 
         # calculate mean rap, <dN>, and <dN>_err 
         mean_rap = mean_rap/particle_yield
@@ -329,6 +358,7 @@ class AnalyzedDataReader(object):
             sqrt(particle_yield_err/self.tot_nev - particle_yield**2)
             /sqrt(self.tot_nev))*drap
         return(mean_rap, particle_yield, particle_yield_err)
+
     ###########################################################################
     # functions to collect particle emission function
     ########################################################################### 
@@ -359,19 +389,38 @@ class AnalyzedDataReader(object):
         dN_avg = zeros([nsv, 3])
 
         #fetch data
-        for hydroId in range(1, self.hydro_nev+1):
-            urqmd_nev = self.db.executeSQLquery(
-                "select Number_of_UrQMDevents from UrQMD_NevList where "
-                "hydroEventId = %d " % hydroId).fetchall()[0][0]
-            for urqmdId in range(1, urqmd_nev+1):
+        for ibin in range(1, self.nev_bin):
+            print("processing events %d to %d ..." 
+                % ((ibin-1)*self.process_nev, ibin*self.process_nev))
+            hydro_ev_bound_low = self.event_bound_hydro[ibin-1]
+            hydro_ev_bound_high = self.event_bound_hydro[ibin]
+            urqmd_ev_bound_low = self.event_bound_urqmd[ibin-1]
+            urqmd_ev_bound_high = self.event_bound_urqmd[ibin]
+            if hydro_ev_bound_low == hydro_ev_bound_high:
                 temp_data = array(self.db.executeSQLquery(
-                    "select %s, dN_d%s from %s where hydro_event_id = %d "
-                    "and urqmd_event_id = %d and pid = %d" 
-                    % (sv_type, sv_type, analyzed_table_name, hydroId, 
-                       urqmdId, pid)).fetchall())
-                dN_avg[:,0] += temp_data[:,0]*temp_data[:,1]
-                dN_avg[:,1] += temp_data[:,1]
-                dN_avg[:,2] += temp_data[:,1]**2
+                    "select %s, dN_d%s from %s where pid = %d and "
+                    "hydro_event_id = %d and (%d <= urqmd_event_id "
+                    "and urqmd_event_id < %d)"
+                    % (sv_type, sv_type, analyzed_table_name, pid, 
+                       hydro_ev_bound_low, urqmd_ev_bound_low, 
+                       urqmd_ev_bound_high)
+                ).fetchall())
+            else:
+                temp_data = array(self.db.executeSQLquery(
+                    "select %s, dN_d%s from %s where pid = %d and "
+                    "((hydro_event_id = %d and urqmd_event_id >= %d) "
+                    " or (%d < hydro_event_id and hydro_event_id < %d) "
+                    " or (hydro_event_id = %d and urqmd_event_id < %d))"
+                    % (sv_type, sv_type, analyzed_table_name, pid, 
+                       hydro_ev_bound_low, urqmd_ev_bound_low, 
+                       hydro_ev_bound_low, hydro_ev_bound_high, 
+                       hydro_ev_bound_high, urqmd_ev_bound_high)
+                ).fetchall())
+            for isv in range(nsv):
+                dN_avg[isv,0] += sum(
+                    temp_data[isv::nsv,0]*temp_data[isv::nsv,1])
+                dN_avg[isv,1] += sum(temp_data[isv::nsv,1])
+                dN_avg[isv,2] += sum(temp_data[isv::nsv,1]**2)
         
         # calculate <sv>, <dN/dsv>, and <dN/dsv>_err 
         dN_avg[:,0] = dN_avg[:,0]/(dN_avg[:,1] + eps)
@@ -1298,10 +1347,10 @@ if __name__ == "__main__":
         printHelpMessageandQuit()
     test = AnalyzedDataReader(str(argv[1]))
     print(test.get_particle_spectra('pion_p', pT_range=linspace(0.1, 2.5, 20), rap_type = 'pseudorapidity'))
-    #print(test.get_particle_yield_vs_rap('pion_p', rap_type = 'rapidity', rap_range=linspace(-1.0, 1.0, 15)))
-    #print(test.get_particle_yield('pion_p', rap_type = 'rapidity', rap_range=(-0.5, 0.5)))
-    #print(test.get_particle_yield_vs_spatial_variable('pion_p', 'tau', 
-    #      linspace(0.6, 10, 50), rap_type = 'rapidity'))
+    print(test.get_particle_yield_vs_rap('pion_p', rap_type = 'rapidity', rap_range=linspace(-1.0, 1.0, 15)))
+    print(test.get_particle_yield('pion_p', rap_type = 'rapidity', rap_range=(-0.5, 0.5)))
+    print(test.get_particle_yield_vs_spatial_variable('pion_p', 'tau', 
+          linspace(0.6, 10, 50), rap_type = 'rapidity'))
    # print(test.get_avg_diffvn_flow('pion_p', 2, psi_r = 0., 
    #       pT_range = linspace(0.0, 2.0, 21)))
    # print(test.get_avg_intevn_flow('pion_p', 2, psi_r = 0., 
