@@ -702,6 +702,7 @@ if __name__ == "__main__":
     test.collect_particle_yield_vs_rap("charged", rap_type = 'pseudorapidity')
     test.collect_basic_particle_spectra()
     test.collect_basic_particle_yield()
+    test.collect_flow_Qn_vectors('charged')
     for aPart in ['pion_p', 'kaon_p', 'proton']:
         test.collect_flow_Qn_vectors(aPart)
         test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
