@@ -465,7 +465,7 @@ class AnalyzedDataReader(object):
             "urqmd_event_id = %d and pid = %d and weight_type = '1' and n = %d" 
             % (analyzed_table_name, 1, 1, pid, order)).fetchall())
 
-        vn_avg = zeros([npT, 3])
+        vn_avg = zeros([npT, 5])
         vn_real = zeros(npT)
         vn_imag = zeros(npT)
         vn_real_err = zeros(npT)
@@ -520,14 +520,18 @@ class AnalyzedDataReader(object):
         vn_imag = vn_imag/nev_pT
         vn_real_err = sqrt(vn_real_err/nev_pT - vn_real**2)/sqrt(nev_pT-1)
         vn_imag_err = sqrt(vn_imag_err/nev_pT - vn_imag**2)/sqrt(nev_pT-1)
-        vn_avg[:,1] = sqrt(vn_real**2. + vn_imag**2.)
-        vn_avg[:,2] = (sqrt(
-            (vn_real*vn_real_err)**2. + (vn_imag*vn_imag_err)**2.)/vn_avg[:,1])
+        vn_avg[:,1] = vn_real
+        vn_avg[:,2] = vn_real_err
+        vn_avg[:,3] = vn_imag
+        vn_avg[:,4] = vn_imag
         
         #interpolate results to desired pT range
-        vn_avg_interp = interp(pT_range, vn_avg[:,0], vn_avg[:,1])
-        vn_avg_interp_err = interp(pT_range, vn_avg[:,0], vn_avg[:,2])
-        results = array([pT_range, vn_avg_interp, vn_avg_interp_err])
+        vn_real_interp = interp(pT_range, vn_avg[:,0], vn_avg[:,1])
+        vn_real_interp_err = interp(pT_range, vn_avg[:,0], vn_avg[:,2])
+        vn_imag_interp = interp(pT_range, vn_avg[:,0], vn_avg[:,3])
+        vn_imag_interp_err = interp(pT_range, vn_avg[:,0], vn_avg[:,4])
+        results = array([pT_range, vn_real_interp, vn_real_interp_err,
+                         vn_imag_interp, vn_imag_interp_err])
         return transpose(results)
         
     def get_avg_intevn_flow(
@@ -540,7 +544,7 @@ class AnalyzedDataReader(object):
         pid = self.pid_lookup[particle_name]
         analyzed_table_name = 'flow_Qn_vectors_pTdiff'
 
-        vn_avg = zeros(3)
+        vn_avg = zeros(5)
         vn_real = 0.0
         vn_imag = 0.0
         vn_real_err = 0.0
@@ -619,9 +623,10 @@ class AnalyzedDataReader(object):
         vn_imag = vn_imag/nev
         vn_real_err = sqrt(vn_real_err/nev - vn_real**2)/sqrt(nev-1)
         vn_imag_err = sqrt(vn_imag_err/nev - vn_imag**2)/sqrt(nev-1)
-        vn_avg[1] = sqrt(vn_real**2. + vn_imag**2.)
-        vn_avg[2] = (sqrt(
-            (vn_real*vn_real_err)**2. + (vn_imag*vn_imag_err)**2.)/vn_avg[1])
+        vn_avg[1] = vn_real
+        vn_avg[2] = vn_real_err
+        vn_avg[:,3] = vn_imag
+        vn_avg[:,4] = vn_imag_err
         
         return vn_avg
     
@@ -642,7 +647,7 @@ class AnalyzedDataReader(object):
             "urqmd_event_id = %d and pid = %d and weight_type = '1' and n = %d" 
             % (analyzed_table_name_diff, 1, 1, pid, order)).fetchall())
 
-        vn_avg = zeros([npT, 3])
+        vn_avg = zeros([npT, 5])
         vn_real = zeros(npT)
         vn_imag = zeros(npT)
         vn_real_err = zeros(npT)
@@ -724,15 +729,18 @@ class AnalyzedDataReader(object):
         vn_imag = vn_imag/nev_pT
         vn_real_err = sqrt(vn_real_err/nev_pT - vn_real**2)/sqrt(nev_pT-1)
         vn_imag_err = sqrt(vn_imag_err/nev_pT - vn_imag**2)/sqrt(nev_pT-1)
-        vn_avg[:,1] = sqrt(vn_real**2. + vn_imag**2.)/resolutionFactor
-        vn_avg[:,2] = (sqrt(
-            (vn_real*vn_real_err)**2. + (vn_imag*vn_imag_err)**2.)
-            /vn_avg[:,1]/resolutionFactor)
+        vn_avg[:,1] = vn_real/resolutionFactor
+        vn_avg[:,2] = vn_real_err/resolutionFactor
+        vn_avg[:,3] = vn_imag/resolutionFactor
+        vn_avg[:,4] = vn_imag_err/resolutionFactor
         
         #interpolate results to desired pT range
-        vn_avg_interp = interp(pT_range, vn_avg[:,0], vn_avg[:,1])
-        vn_avg_interp_err = interp(pT_range, vn_avg[:,0], vn_avg[:,2])
-        results = array([pT_range, vn_avg_interp, vn_avg_interp_err])
+        vn_real_interp = interp(pT_range, vn_avg[:,0], vn_avg[:,1])
+        vn_real_interp_err = interp(pT_range, vn_avg[:,0], vn_avg[:,2])
+        vn_imag_interp = interp(pT_range, vn_avg[:,0], vn_avg[:,3])
+        vn_imag_interp_err = interp(pT_range, vn_avg[:,0], vn_avg[:,4])
+        results = array([pT_range, vn_real_interp, vn_real_interp_err,
+                         vn_imag_interp, vn_imag_interp_err])
         return transpose(results)
         
     def get_event_plane_intevn_flow(
@@ -747,7 +755,7 @@ class AnalyzedDataReader(object):
         analyzed_table_name_diff = 'flow_Qn_vectors_pTdiff'
         analyzed_table_name_inte = 'flow_Qn_vectors'
 
-        vn_avg = zeros(3)
+        vn_avg = zeros(5)
         vn_real = 0.0
         vn_imag = 0.0
         vn_real_err = 0.0
@@ -854,12 +862,12 @@ class AnalyzedDataReader(object):
         vn_imag = vn_imag/nev
         vn_real_err = sqrt(vn_real_err/nev - vn_real**2)/sqrt(nev-1)
         vn_imag_err = sqrt(vn_imag_err/nev - vn_imag**2)/sqrt(nev-1)
-        vn_avg[1] = sqrt(vn_real**2. + vn_imag**2.)/resolutionFactor
-        vn_avg[2] = (sqrt(
-            (vn_real*vn_real_err)**2. + (vn_imag*vn_imag_err)**2.)
-            /vn_avg[1]/resolutionFactor)
+        vn_avg[1] = vn_real/resolutionFactor
+        vn_avg[2] = vn_real_err/resolutionFactor
+        vn_avg[3] = vn_imag/resolutionFactor
+        vn_avg[4] = vn_imag_err/resolutionFactor
         
-        return (vn_avg, resolutionFactor, resolutionFactor_imag)
+        return (vn_avg)
 
     def get_scalar_product_diffvn_flow(
         self, particle_name, order, pT_range=linspace(0.0, 3.0, 31)):
@@ -878,7 +886,7 @@ class AnalyzedDataReader(object):
             "urqmd_event_id = %d and pid = %d and weight_type = '1' and n = %d" 
             % (analyzed_table_name_diff, 1, 1, pid, order)).fetchall())
 
-        vn_avg = zeros([npT, 3])
+        vn_avg = zeros([npT, 5])
         vn_real = zeros(npT)
         vn_imag = zeros(npT)
         vn_real_err = zeros(npT)
@@ -961,15 +969,18 @@ class AnalyzedDataReader(object):
         vn_imag = vn_imag/nev_pT
         vn_real_err = sqrt(vn_real_err/nev_pT - vn_real**2)/sqrt(nev_pT-1)
         vn_imag_err = sqrt(vn_imag_err/nev_pT - vn_imag**2)/sqrt(nev_pT-1)
-        vn_avg[:,1] = sqrt(vn_real**2. + vn_imag**2.)/vn_ch_rms
-        vn_avg[:,2] = (sqrt(
-            (vn_real*vn_real_err)**2. + (vn_imag*vn_imag_err)**2.)
-            /vn_avg[:,1]/vn_ch_rms)
+        vn_avg[:,1] = vn_real/vn_ch_rms
+        vn_avg[:,2] = vn_real_err/vn_ch_rms
+        vn_avg[:,3] = vn_imag/vn_ch_rms
+        vn_avg[:,4] = vn_imag_err/vn_ch_rms
         
         #interpolate results to desired pT range
-        vn_avg_interp = interp(pT_range, vn_avg[:,0], vn_avg[:,1])
-        vn_avg_interp_err = interp(pT_range, vn_avg[:,0], vn_avg[:,2])
-        results = array([pT_range, vn_avg_interp, vn_avg_interp_err])
+        vn_real_interp = interp(pT_range, vn_avg[:,0], vn_avg[:,1])
+        vn_real_interp_err = interp(pT_range, vn_avg[:,0], vn_avg[:,2])
+        vn_imag_interp = interp(pT_range, vn_avg[:,0], vn_avg[:,3])
+        vn_imag_interp_err = interp(pT_range, vn_avg[:,0], vn_avg[:,4])
+        results = array([pT_range, vn_real_interp, vn_real_interp_err,
+                         vn_imag_interp, vn_imag_interp_err])
         return transpose(results)
         
     def get_scalar_product_intevn_flow(
@@ -985,7 +996,7 @@ class AnalyzedDataReader(object):
         analyzed_table_name_diff = 'flow_Qn_vectors_pTdiff'
         analyzed_table_name_inte = 'flow_Qn_vectors'
 
-        vn_avg = zeros(3)
+        vn_avg = zeros(5)
         vn_real = 0.0
         vn_imag = 0.0
         vn_real_err = 0.0
@@ -1094,12 +1105,12 @@ class AnalyzedDataReader(object):
         vn_imag = vn_imag/nev
         vn_real_err = sqrt(vn_real_err/nev - vn_real**2)/sqrt(nev-1)
         vn_imag_err = sqrt(vn_imag_err/nev - vn_imag**2)/sqrt(nev-1)
-        vn_avg[1] = sqrt(vn_real**2. + vn_imag**2.)/vn_ch_rms
-        vn_avg[2] = (sqrt(
-                     (vn_real*vn_real_err)**2. + (vn_imag*vn_imag_err)**2.)
-                     /vn_avg[1]/vn_ch_rms)
+        vn_avg[1] = vn_real/vn_ch_rms
+        vn_avg[2] = vn_real_err/vn_ch_rms
+        vn_avg[3] = vn_imag/vn_ch_rms
+        vn_avg[4] = vn_imag_err/vn_ch_rms
         
-        return (vn_avg, vn_ch_rms, vn_ch_rms_imag)
+        return vn_avg
 
     def get_diffvn_2pc_flow(
         self, particle_name, order, pT_range=linspace(0.0, 3.0, 31)):
