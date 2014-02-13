@@ -459,10 +459,10 @@ class ParticleReader(object):
         """
             return Qn_data, Qn_pTdata for partitle with pid_string with 
             weight_type from one given event
-            Qn_data = (n, Nparticle, Qn, Qn_psi, Nparticle_sub, QnA, QnA_psi,
-                       QnB, QnB_psi)
-            Qn_pTdata = (n, pT, Nparticle, Qn, Qn_psi, Nparticle_sub, QnA, 
-                         QnA_psi, QnB, QnB_psi)
+            Qn_data = (n, Nparticle, Qn_real, Qn_imag, Nparticle_sub, 
+                       QnA_real, QnA_imag, QnB_real, QnB_imag)
+            Qn_pTdata = (n, pT, Nparticle, Qn_real, Qn_imag, Nparticle_sub, 
+                         QnA_real, QnA_imag, QnB_real, QnB_imag)
         """
         eps = 1e-15
         norder = 6
@@ -522,26 +522,23 @@ class ParticleReader(object):
             temp_Qn_x = sum(weight[idx]*cos(iorder*phi[idx]))
             temp_Qn_y = sum(weight[idx]*sin(iorder*phi[idx]))
             Qn_data[iorder-1,1] = Nparticle
-            Qn_data[iorder-1,2] = (
-                             sqrt(temp_Qn_x**2 + temp_Qn_y**2)/(Nparticle+eps))
-            Qn_data[iorder-1,3] = arctan2(temp_Qn_y, temp_Qn_x)/iorder
+            Qn_data[iorder-1,2] = temp_Qn_x/(Nparticle + eps)
+            Qn_data[iorder-1,3] = temp_Qn_y/(Nparticle + eps)
             # QnA vectors at forward rapidity
             temp_Qn_x = sum(weight[idxA[0:Nparticle_sub]]
                             *cos(iorder*phi[idxA[0:Nparticle_sub]]))
             temp_Qn_y = sum(weight[idxA[0:Nparticle_sub]]
                             *sin(iorder*phi[idxA[0:Nparticle_sub]]))
             Qn_data[iorder-1,4] = Nparticle_sub
-            Qn_data[iorder-1,5] = (
-                sqrt(temp_Qn_x**2 + temp_Qn_y**2)/(Nparticle_sub+eps))
-            Qn_data[iorder-1,6] = arctan2(temp_Qn_y, temp_Qn_x)/iorder
+            Qn_data[iorder-1,5] = temp_Qn_x/(Nparticle_sub + eps)
+            Qn_data[iorder-1,6] = temp_Qn_y/(Nparticle_sub + eps)
             # QnB vector at backward rapidity
             temp_Qn_x = sum(weight[idxB[0:Nparticle_sub]]
                             *cos(iorder*phi[idxB[0:Nparticle_sub]]))
             temp_Qn_y = sum(weight[idxB[0:Nparticle_sub]]
                             *sin(iorder*phi[idxB[0:Nparticle_sub]]))
-            Qn_data[iorder-1,7] = (
-                sqrt(temp_Qn_x**2 + temp_Qn_y**2)/(Nparticle_sub+eps))
-            Qn_data[iorder-1,8] = arctan2(temp_Qn_y, temp_Qn_x)/iorder
+            Qn_data[iorder-1,7] = temp_Qn_x/(Nparticle_sub + eps)
+            Qn_data[iorder-1,8] = temp_Qn_y/(Nparticle_sub + eps)
             for ipT in range(npT):
                 data_idx = (iorder-1)*npT + ipT
                 if idx_pT[ipT] == []: continue
@@ -554,9 +551,8 @@ class ParticleReader(object):
                 temp_Qn_y = sum(
                     weight[idx_pT[ipT]]*sin(iorder*phi[idx_pT[ipT]]))
                 Qn_pTdata[data_idx,2] = Nparticle_pT
-                Qn_pTdata[data_idx,3] = (
-                    sqrt(temp_Qn_x**2 + temp_Qn_y**2)/(Nparticle_pT+eps))
-                Qn_pTdata[data_idx,4] = arctan2(temp_Qn_y, temp_Qn_x)/iorder
+                Qn_pTdata[data_idx,3] = temp_Qn_x/(Nparticle_pT + eps)
+                Qn_pTdata[data_idx,4] = temp_Qn_y/(Nparticle_pT + eps)
                 # pT differential QnA vectors at forward rapidity
                 temp_Qn_x = sum(
                     weight[idxA_pT[ipT][0:Nparticle_sub_pT]]
@@ -565,9 +561,8 @@ class ParticleReader(object):
                     weight[idxA_pT[ipT][0:Nparticle_sub_pT]]
                     *sin(iorder*phi[idxA_pT[ipT][0:Nparticle_sub_pT]]))
                 Qn_pTdata[data_idx,5] = Nparticle_sub_pT
-                Qn_pTdata[data_idx,6] = (
-                    sqrt(temp_Qn_x**2 + temp_Qn_y**2)/(Nparticle_sub_pT+eps))
-                Qn_pTdata[data_idx,7] = arctan2(temp_Qn_y, temp_Qn_x)/iorder
+                Qn_pTdata[data_idx,6] = temp_Qn_x/(Nparticle_sub_pT + eps)
+                Qn_pTdata[data_idx,7] = temp_Qn_y/(Nparticle_sub_pT + eps)
                 # pT differential QnB vector at backward rapidity
                 temp_Qn_x = sum(
                     weight[idxB_pT[ipT][0:Nparticle_sub_pT]]
@@ -575,9 +570,8 @@ class ParticleReader(object):
                 temp_Qn_y = sum(
                     weight[idxB_pT[ipT][0:Nparticle_sub_pT]]
                     *sin(iorder*phi[idxB_pT[ipT][0:Nparticle_sub_pT]]))
-                Qn_pTdata[data_idx,8] = (
-                    sqrt(temp_Qn_x**2 + temp_Qn_y**2)/(Nparticle_sub_pT+eps))
-                Qn_pTdata[data_idx,9] = arctan2(temp_Qn_y, temp_Qn_x)/iorder
+                Qn_pTdata[data_idx,8] = temp_Qn_x/(Nparticle_sub_pT + eps)
+                Qn_pTdata[data_idx,9] = temp_Qn_y/(Nparticle_sub_pT + eps)
 
         return(Qn_data, Qn_pTdata)
         
@@ -608,14 +602,15 @@ class ParticleReader(object):
         if self.analyzed_db.createTableIfNotExists(analyzed_table_name,
             (('hydro_event_id', 'integer'), ('urqmd_event_id', 'integer'),
              ('pid', 'integer'), ('weight_type', 'text'), ('n', 'integer'),
-             ('Nparticle', 'integer'), ('Qn', 'real'), ('Qn_psi', 'real'),
-             ('Nparticle_sub', 'integer'), ('QnA', 'real'), 
-             ('QnA_psi', 'real'), ('QnB', 'real'), ('QnB_psi', 'real')
+             ('Nparticle', 'integer'), ('Qn_real', 'real'), 
+             ('Qn_imag', 'real'), ('Nparticle_sub', 'integer'), 
+             ('QnA_real', 'real'), ('QnA_imag', 'real'), 
+             ('QnB_real', 'real'), ('QnB_imag', 'real')
             )):
             collected_flag = False
         else:
             try_data = array(self.analyzed_db.executeSQLquery(
-                "select Qn from %s where "
+                "select Qn_real from %s where "
                 "hydro_event_id = %d and urqmd_event_id = %d and pid = %d and "
                 "n = 1" % (analyzed_table_name, 1, 1, pid)).fetchall())
             if try_data.size == 0: collected_flag = False
@@ -638,14 +633,15 @@ class ParticleReader(object):
             (('hydro_event_id', 'integer'), ('urqmd_event_id', 'integer'),
              ('pid', 'integer'), ('weight_type', 'text'), ('n', 'integer'),
              ('pT', 'real'), 
-             ('Nparticle', 'integer'), ('Qn', 'real'), ('Qn_psi', 'real'),
-             ('Nparticle_sub', 'integer'), ('QnA', 'real'), 
-             ('QnA_psi', 'real'), ('QnB', 'real'), ('QnB_psi', 'real')
+             ('Nparticle', 'integer'), ('Qn_real', 'real'), 
+             ('Qn_imag', 'real'), ('Nparticle_sub', 'integer'), 
+             ('QnA_real', 'real'), ('QnA_imag', 'real'), 
+             ('QnB_real', 'real'), ('QnB_imag', 'real')
             )):
             collected_pTdiff_flag = False
         else:
             try_data = array(self.analyzed_db.executeSQLquery(
-                "select Qn from %s where "
+                "select Qn_real from %s where "
                 "hydro_event_id = %d and urqmd_event_id = %d and pid = %d and "
                 "n = 1" % (analyzed_table_pTdiff_name, 1, 1, pid)).fetchall())
             if try_data.size == 0: collected_pTdiff_flag = False
