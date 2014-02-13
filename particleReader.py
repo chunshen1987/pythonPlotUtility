@@ -508,11 +508,13 @@ class ParticleReader(object):
                 idx.append(ipart)
                 if pTpos < npT: idx_pT[pTpos].append(ipart)
             if rap[ipart] <= 2.0 and rap[ipart] > 0.5:
-                idxA.append(ipart)
                 if pTpos < npT: idxA_pT[pTpos].append(ipart)
             if rap[ipart] < -0.5 and rap[ipart] >= -2.0:
-                idxB.append(ipart)
                 if pTpos < npT: idxB_pT[pTpos].append(ipart)
+        for ipT in range(npT):
+            Nparticle_sub_pT = min(len(idxA_pT[ipT]), len(idxB_pT[ipT]))
+            idxA += idxA_pT[ipT][0:Nparticle_sub_pT]]
+            idxB += idxB_pT[ipT][0:Nparticle_sub_pT]]
 
         # calculate Qn vectors
         Nparticle = len(idx)
