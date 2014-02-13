@@ -93,6 +93,9 @@ class ParticleReader(object):
                     aTable, self.db.getTableInfo(aTable)):
                 self.analyzed_db.insertIntoTable(
                     aTable, self.db.selectFromTable(aTable))
+        
+        # set maximum rapidity acceptance 
+        self.rapmax = 10.0
 
     ###########################################################################
     # functions to get number of events
@@ -507,9 +510,9 @@ class ParticleReader(object):
             if rap[ipart] <= 0.5 and rap[ipart] >= -0.5:
                 idx.append(ipart)
                 if pTpos < npT: idx_pT[pTpos].append(ipart)
-            if rap[ipart] <= 2.0 and rap[ipart] > 0.5:
+            if rap[ipart] <= self.rapmax and rap[ipart] > 0.5:
                 if pTpos < npT: idxA_pT[pTpos].append(ipart)
-            if rap[ipart] < -0.5 and rap[ipart] >= -2.0:
+            if rap[ipart] < -0.5 and rap[ipart] >= -self.rapmax:
                 if pTpos < npT: idxB_pT[pTpos].append(ipart)
         for ipT in range(npT):
             Nparticle_sub_pT = min(len(idxA_pT[ipT]), len(idxB_pT[ipT]))
@@ -582,10 +585,14 @@ class ParticleReader(object):
             collect nth order flow Qn vector and sub-event QnA, QnB vectors
             for all the events. n is from 1 to 6
             Qn := 1/Nparticle * sum_i exp[i*n*phi_i]
-            Qn are calculated using particles with -0.5 <= y or eta <= 0.5 
-            QnA are calculated using particles with 0.5 < y or eta < 2.0
-            QnB is calculated using particles with -2.0 < y or eta < -0.5
-            (y for identified particles and eta for all charged particles)
+            Qn are calculated using particles with 
+                              -0.5 <= y or eta <= 0.5 
+            QnA are calculated using particles with 
+                               0.5 < y or eta < self.rapmax
+            QnB is calculated using particles with 
+                            - self.rapmax < y or eta < -0.5
+            (rapidity is used for identified particles 
+             and pseudorapidity is used for all charged particles)
         """
         # get pid string
         pid = self.pid_lookup[particle_name]
@@ -705,15 +712,15 @@ if __name__ == "__main__":
     test.collect_flow_Qn_vectors('charged')
     for aPart in ['pion_p', 'kaon_p', 'proton']:
         test.collect_flow_Qn_vectors(aPart)
-        test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
-            linspace(0.0, 15.0, 76), 'rapidity', (-0.5, 0.5))
-        test.collect_particle_yield_vs_spatial_variable(aPart, 'x', 
-            linspace(-13.0, 13.0, 131), 'rapidity', (-0.5, 0.5))
-        test.collect_particle_yield_vs_spatial_variable(aPart, 'eta', 
-            linspace(-2.0, 2.0, 41), 'rapidity', (-0.5, 0.5))
-        test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
-            linspace(0.0, 15.0, 76), 'pseudorapidity', (-0.5, 0.5))
-        test.collect_particle_yield_vs_spatial_variable(aPart, 'x', 
-            linspace(-13.0, 13.0, 131), 'pseudorapidity', (-0.5, 0.5))
-        test.collect_particle_yield_vs_spatial_variable(aPart, 'eta', 
-            linspace(-2.0, 2.0, 41), 'pseudorapidity', (-0.5, 0.5))
+        #test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
+        #    linspace(0.0, 15.0, 76), 'rapidity', (-0.5, 0.5))
+        #test.collect_particle_yield_vs_spatial_variable(aPart, 'x', 
+        #    linspace(-13.0, 13.0, 131), 'rapidity', (-0.5, 0.5))
+        #test.collect_particle_yield_vs_spatial_variable(aPart, 'eta', 
+        #    linspace(-2.0, 2.0, 41), 'rapidity', (-0.5, 0.5))
+        #test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
+        #    linspace(0.0, 15.0, 76), 'pseudorapidity', (-0.5, 0.5))
+        #test.collect_particle_yield_vs_spatial_variable(aPart, 'x', 
+        #    linspace(-13.0, 13.0, 131), 'pseudorapidity', (-0.5, 0.5))
+        #test.collect_particle_yield_vs_spatial_variable(aPart, 'eta', 
+        #    linspace(-2.0, 2.0, 41), 'pseudorapidity', (-0.5, 0.5))
