@@ -516,6 +516,7 @@ class ParticleReader(object):
                 if pTpos < npT: idxB_pT[pTpos].append(ipart)
         for ipT in range(npT):
             Nparticle_sub_pT = min(len(idxA_pT[ipT]), len(idxB_pT[ipT]))
+            if Nparticle_sub_pT == 0: continue
             idxA += idxA_pT[ipT][0:Nparticle_sub_pT]
             idxB += idxB_pT[ipT][0:Nparticle_sub_pT]
 
@@ -546,18 +547,19 @@ class ParticleReader(object):
             Qn_data[iorder-1,8] = temp_Qn_y/(Nparticle_sub + eps)
             for ipT in range(npT):
                 data_idx = (iorder-1)*npT + ipT
-                if idx_pT[ipT] == []: continue
-                Nparticle_pT = len(idx_pT[ipT])
+                if idx_pT[ipT] != []:
+                    Nparticle_pT = len(idx_pT[ipT])
+                    Qn_pTdata[data_idx,1] = mean(pT[idx_pT[ipT]])
+                    # pT differential Qn vectors at mid rapidity
+                    temp_Qn_x = sum(
+                        weight[idx_pT[ipT]]*cos(iorder*phi[idx_pT[ipT]]))
+                    temp_Qn_y = sum(
+                        weight[idx_pT[ipT]]*sin(iorder*phi[idx_pT[ipT]]))
+                    Qn_pTdata[data_idx,2] = Nparticle_pT
+                    Qn_pTdata[data_idx,3] = temp_Qn_x/(Nparticle_pT + eps)
+                    Qn_pTdata[data_idx,4] = temp_Qn_y/(Nparticle_pT + eps)
                 Nparticle_sub_pT = min(len(idxA_pT[ipT]), len(idxB_pT[ipT]))
-                Qn_pTdata[data_idx,1] = mean(pT[idx_pT[ipT]])
-                # pT differential Qn vectors at mid rapidity
-                temp_Qn_x = sum(
-                    weight[idx_pT[ipT]]*cos(iorder*phi[idx_pT[ipT]]))
-                temp_Qn_y = sum(
-                    weight[idx_pT[ipT]]*sin(iorder*phi[idx_pT[ipT]]))
-                Qn_pTdata[data_idx,2] = Nparticle_pT
-                Qn_pTdata[data_idx,3] = temp_Qn_x/(Nparticle_pT + eps)
-                Qn_pTdata[data_idx,4] = temp_Qn_y/(Nparticle_pT + eps)
+                if Nparticle_sub_pT == 0: continue
                 # pT differential QnA vectors at forward rapidity
                 temp_Qn_x = sum(
                     weight[idxA_pT[ipT][0:Nparticle_sub_pT]]
