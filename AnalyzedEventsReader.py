@@ -1359,8 +1359,6 @@ class AnalyzedDataReader(object):
         resolutionFactor_1_imag = 0.0
         resolutionFactor_2 = 0.0
         resolutionFactor_2_imag = 0.0
-        nev_resolution_1 = 0
-        nev_resolution_2 = 0
 
         npT_1 = len(self.db.executeSQLquery(
             "select pT from %s where hydro_event_id = %d and "
@@ -1387,7 +1385,8 @@ class AnalyzedDataReader(object):
             urqmd_ev_bound_high = self.event_bound_urqmd[ibin]
             if hydro_ev_bound_low == hydro_ev_bound_high:
                 temp_1_data = array(self.db.executeSQLquery(
-                    "select pT, Nparticle_sub, QnA_real, QnA_imag from %s "
+                    "select pT, Nparticle_sub, QnA_real, QnA_imag, "
+                    "QnB_real, QnB_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "hydro_event_id = %d and "
                     "(%d <= urqmd_event_id and urqmd_event_id < %d) and "
@@ -1397,7 +1396,8 @@ class AnalyzedDataReader(object):
                        urqmd_ev_bound_high, pT_1_range[0], pT_1_range[1])
                 ).fetchall())
                 temp_2_data = array(self.db.executeSQLquery(
-                    "select pT, Nparticle_sub, QnB_real, QnB_imag from %s "
+                    "select pT, Nparticle_sub, QnB_real, QnB_imag, "
+                    "QnA_real, QnA_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "hydro_event_id = %d and "
                     "(%d <= urqmd_event_id and urqmd_event_id < %d) and "
@@ -1406,27 +1406,10 @@ class AnalyzedDataReader(object):
                        hydro_ev_bound_low, urqmd_ev_bound_low, 
                        urqmd_ev_bound_high, pT_2_range[0], pT_2_range[1])
                 ).fetchall())
-                ref_1_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag, Nparticle_sub from %s "
-                    "where pid = %d and weight_type = '1' and n = %d and "
-                    "hydro_event_id = %d and "
-                    "(%d <= urqmd_event_id and urqmd_event_id < %d)"
-                    % (analyzed_table_name_inte, pid, n1, 
-                       hydro_ev_bound_low, urqmd_ev_bound_low, 
-                       urqmd_ev_bound_high)
-                ).fetchall())
-                ref_2_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag from %s "
-                    "where pid = %d and weight_type = '1' and n = %d and "
-                    "hydro_event_id = %d and "
-                    "(%d <= urqmd_event_id and urqmd_event_id < %d)"
-                    % (analyzed_table_name_inte, pid, n2, 
-                       hydro_ev_bound_low, urqmd_ev_bound_low, 
-                       urqmd_ev_bound_high)
-                ).fetchall())
             else:
                 temp_1_data = array(self.db.executeSQLquery(
-                    "select pT, Nparticle_sub, QnA_real, QnA_imag from %s "
+                    "select pT, Nparticle_sub, QnA_real, QnA_imag, "
+                    "QnB_real, QnB_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "((hydro_event_id = %d and urqmd_event_id >= %d) "
                     " or (%d < hydro_event_id and hydro_event_id < %d) "
@@ -1439,7 +1422,8 @@ class AnalyzedDataReader(object):
                        pT_1_range[0], pT_1_range[1])
                 ).fetchall())
                 temp_2_data = array(self.db.executeSQLquery(
-                    "select pT, Nparticle_sub, QnB_real, QnB_imag from %s "
+                    "select pT, Nparticle_sub, QnB_real, QnB_imag, "
+                    "QnA_real, QnA_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "((hydro_event_id = %d and urqmd_event_id >= %d) "
                     " or (%d < hydro_event_id and hydro_event_id < %d) "
@@ -1451,50 +1435,6 @@ class AnalyzedDataReader(object):
                        hydro_ev_bound_high, urqmd_ev_bound_high,
                        pT_2_range[0], pT_2_range[1])
                 ).fetchall())
-                ref_1_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag, Nparticle_sub from %s "
-                    "where pid = %d and weight_type = '1' and n = %d and "
-                    "((hydro_event_id = %d and urqmd_event_id >= %d) "
-                    " or (%d < hydro_event_id and hydro_event_id < %d) "
-                    " or (hydro_event_id = %d and urqmd_event_id < %d))"
-                    % (analyzed_table_name_inte, pid, n1,
-                       hydro_ev_bound_low, urqmd_ev_bound_low, 
-                       hydro_ev_bound_low, hydro_ev_bound_high, 
-                       hydro_ev_bound_high, urqmd_ev_bound_high)
-                ).fetchall())
-                ref_2_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag from %s "
-                    "where pid = %d and weight_type = '1' and n = %d and "
-                    "((hydro_event_id = %d and urqmd_event_id >= %d) "
-                    " or (%d < hydro_event_id and hydro_event_id < %d) "
-                    " or (hydro_event_id = %d and urqmd_event_id < %d))"
-                    % (analyzed_table_name_inte, pid, n2,
-                       hydro_ev_bound_low, urqmd_ev_bound_low, 
-                       hydro_ev_bound_low, hydro_ev_bound_high, 
-                       hydro_ev_bound_high, urqmd_ev_bound_high)
-                ).fetchall())
-            Qn1A = sqrt(ref_1_data[:,0]**2 + ref_1_data[:,1]**2)
-            Qn1B = sqrt(ref_1_data[:,2]**2 + ref_1_data[:,3]**2)
-            Qn2A = sqrt(ref_2_data[:,0]**2 + ref_2_data[:,1]**2)
-            Qn2B = sqrt(ref_2_data[:,2]**2 + ref_2_data[:,3]**2)
-            resolutionFactor_1 += sum(
-                ((ref_1_data[:,0]*ref_1_data[:,2] 
-                  + ref_1_data[:,1]*ref_1_data[:,3])/Qn1A/Qn1B)**c1
-            )
-            resolutionFactor_2 += sum(
-                ((ref_2_data[:,0]*ref_2_data[:,2] 
-                  + ref_2_data[:,1]*ref_2_data[:,3])/Qn2A/Qn2B)**c2
-            )
-            resolutionFactor_1_imag += sum(
-                ((ref_1_data[:,1]*ref_1_data[:,2] 
-                  - ref_1_data[:,0]*ref_1_data[:,3])/Qn1A/Qn1B)**c1
-            )
-            resolutionFactor_2_imag += sum(
-                ((ref_2_data[:,1]*ref_2_data[:,2] 
-                  - ref_2_data[:,0]*ref_2_data[:,3])/Qn2A/Qn2B)**c2
-            )
-            nev_resolution_1 += len(ref_1_data[:,0])
-            nev_resolution_2 += len(ref_2_data[:,0])
             temp_nev = int(len(temp_1_data[:,0])/npT_1)
             for iev in range(temp_nev):
                 ev_1_data = temp_1_data[iev*npT_1:(iev+1)*npT_1, :]
@@ -1506,19 +1446,35 @@ class AnalyzedDataReader(object):
                 nev += 1
                 pTinte_Qn_1_x = sum(ev_1_data[:,1]*ev_1_data[:,2])/nparticle_1
                 pTinte_Qn_1_y = sum(ev_1_data[:,1]*ev_1_data[:,3])/nparticle_1
+                
+                pTinte_Qn_ref_1_x = (
+                    sum(ev_1_data[:,1]*ev_1_data[:,4])/nparticle_1)
+                pTinte_Qn_ref_1_y = (
+                    sum(ev_1_data[:,1]*ev_1_data[:,5])/nparticle_1)
 
                 pTinte_Qn_1 = sqrt(pTinte_Qn_1_x**2. + pTinte_Qn_1_y**2)
                 pTinte_Qn_1_psi  = arctan2(pTinte_Qn_1_y, pTinte_Qn_1_x)/n1
+                pTinte_Qn_ref_1 = sqrt(pTinte_Qn_ref_1_x**2. 
+                                       + pTinte_Qn_ref_1_y**2)
+                pTinte_Qn_ref_1_psi  = arctan2(pTinte_Qn_ref_1_y, 
+                                               pTinte_Qn_ref_1_x)/n1
 
                 pTinte_Qn_2_x = sum(ev_2_data[:,1]*ev_2_data[:,2])/nparticle_2
                 pTinte_Qn_2_y = sum(ev_2_data[:,1]*ev_2_data[:,3])/nparticle_2
 
+                pTinte_Qn_ref_2_x = (
+                    sum(ev_2_data[:,1]*ev_2_data[:,4])/nparticle_2)
+                pTinte_Qn_ref_2_y = (
+                    sum(ev_2_data[:,1]*ev_2_data[:,5])/nparticle_2)
+
                 pTinte_Qn_2 = sqrt(pTinte_Qn_2_x**2. + pTinte_Qn_2_y**2)
                 pTinte_Qn_2_psi = arctan2(pTinte_Qn_2_y, pTinte_Qn_2_x)/n2
                 
-                print(nparticle_1, ref_1_data[iev,4])
-                print(pTinte_Qn_1, pTinte_Qn_2, Qn1A[iev], Qn1B[iev])
-
+                pTinte_Qn_ref_2 = sqrt(pTinte_Qn_ref_2_x**2. 
+                                       + pTinte_Qn_ref_2_y**2)
+                pTinte_Qn_ref_2_psi  = arctan2(pTinte_Qn_ref_2_y, 
+                                               pTinte_Qn_ref_2_x)/n2
+                
                 temp_real = cos(n1*c1*pTinte_Qn_1_psi - n2*c2*pTinte_Qn_2_psi)
                 temp_imag = sin(n1*c1*pTinte_Qn_1_psi - n2*c2*pTinte_Qn_2_psi)
 
@@ -1526,10 +1482,19 @@ class AnalyzedDataReader(object):
                 rn_real_err += temp_real**2.
                 rn_imag += temp_imag
                 rn_imag_err += temp_imag**2.
-        resolutionFactor_1 = sqrt(resolutionFactor_1/nev_resolution_1)
-        resolutionFactor_2 = sqrt(resolutionFactor_2/nev_resolution_2)
-        resolutionFactor_1_imag = resolutionFactor_1_imag/nev_resolution_1
-        resolutionFactor_2_imag = resolutionFactor_2_imag/nev_resolution_2
+                
+                resolutionFactor_1 += cos(n1*c1*(pTinte_Qn_ref_1_psi 
+                                                 - pTinte_Qn_1_psi))
+                resolutionFactor_2 += cos(n2*c2*(pTinte_Qn_2_psi 
+                                                 - pTinte_Qn_ref_2_psi))
+                resolutionFactor_1_imag += sin(n1*c1*(pTinte_Qn_ref_1_psi 
+                                                      - pTinte_Qn_1_psi))
+                resolutionFactor_2_imag += sin(n2*c2*(pTinte_Qn_2_psi 
+                                                      - pTinte_Qn_ref_2_psi))
+        resolutionFactor_1 = sqrt(resolutionFactor_1/nev)
+        resolutionFactor_2 = sqrt(resolutionFactor_2/nev)
+        resolutionFactor_1_imag = resolutionFactor_1_imag/nev
+        resolutionFactor_2_imag = resolutionFactor_2_imag/nev
         rn_real = rn_real/nev
         rn_imag = rn_imag/nev
         rn_real_err = sqrt(rn_real_err/nev - rn_real**2)/sqrt(nev-1)
@@ -1538,7 +1503,7 @@ class AnalyzedDataReader(object):
         rn_avg[0] = rn_real/resolutionFactor_1/resolutionFactor_2
         rn_avg[1] = rn_real_err/resolutionFactor_1/resolutionFactor_2
         rn_avg[2] = rn_imag/resolutionFactor_1/resolutionFactor_2
-        rn_avg[2] = rn_imag_err/resolutionFactor_1/resolutionFactor_2
+        rn_avg[3] = rn_imag_err/resolutionFactor_1/resolutionFactor_2
         
         return rn_avg
 
@@ -1581,8 +1546,6 @@ class AnalyzedDataReader(object):
         resolutionFactor_1_imag = 0.0
         resolutionFactor_2 = 0.0
         resolutionFactor_2_imag = 0.0
-        nev_resolution_1 = 0
-        nev_resolution_2 = 0
 
         npT_1 = len(self.db.executeSQLquery(
             "select pT from %s where hydro_event_id = %d and "
@@ -1609,7 +1572,8 @@ class AnalyzedDataReader(object):
             urqmd_ev_bound_high = self.event_bound_urqmd[ibin]
             if hydro_ev_bound_low == hydro_ev_bound_high:
                 temp_1_data = array(self.db.executeSQLquery(
-                    "select pT, Nparticle_sub, QnA_real, QnA_imag from %s "
+                    "select pT, Nparticle_sub, QnA_real, QnA_imag, "
+                    "QnB_real, QnB_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "hydro_event_id = %d and "
                     "(%d <= urqmd_event_id and urqmd_event_id < %d) and "
@@ -1619,7 +1583,8 @@ class AnalyzedDataReader(object):
                        urqmd_ev_bound_high, pT_1_range[0], pT_1_range[1])
                 ).fetchall())
                 temp_2_data = array(self.db.executeSQLquery(
-                    "select pT, Nparticle_sub, QnB_real, QnB_imag from %s "
+                    "select pT, Nparticle_sub, QnB_real, QnB_imag, "
+                    "QnA_real, QnA_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "hydro_event_id = %d and "
                     "(%d <= urqmd_event_id and urqmd_event_id < %d) and "
@@ -1628,27 +1593,10 @@ class AnalyzedDataReader(object):
                        hydro_ev_bound_low, urqmd_ev_bound_low, 
                        urqmd_ev_bound_high, pT_2_range[0], pT_2_range[1])
                 ).fetchall())
-                ref_1_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag from %s "
-                    "where pid = %d and weight_type = '1' and n = %d and "
-                    "hydro_event_id = %d and "
-                    "(%d <= urqmd_event_id and urqmd_event_id < %d)"
-                    % (analyzed_table_name_inte, pid, n1, 
-                       hydro_ev_bound_low, urqmd_ev_bound_low, 
-                       urqmd_ev_bound_high)
-                ).fetchall())
-                ref_2_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag from %s "
-                    "where pid = %d and weight_type = '1' and n = %d and "
-                    "hydro_event_id = %d and "
-                    "(%d <= urqmd_event_id and urqmd_event_id < %d)"
-                    % (analyzed_table_name_inte, pid, n2, 
-                       hydro_ev_bound_low, urqmd_ev_bound_low, 
-                       urqmd_ev_bound_high)
-                ).fetchall())
             else:
                 temp_1_data = array(self.db.executeSQLquery(
-                    "select pT, Nparticle_sub, QnA_real, QnA_imag from %s "
+                    "select pT, Nparticle_sub, QnA_real, QnA_imag, "
+                    "QnB_real, QnB_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "((hydro_event_id = %d and urqmd_event_id >= %d) "
                     " or (%d < hydro_event_id and hydro_event_id < %d) "
@@ -1661,7 +1609,8 @@ class AnalyzedDataReader(object):
                        pT_1_range[0], pT_1_range[1])
                 ).fetchall())
                 temp_2_data = array(self.db.executeSQLquery(
-                    "select pT, Nparticle_sub, QnB_real, QnB_imag from %s "
+                    "select pT, Nparticle_sub, QnB_real, QnB_imag, "
+                    "QnA_real, QnA_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "((hydro_event_id = %d and urqmd_event_id >= %d) "
                     " or (%d < hydro_event_id and hydro_event_id < %d) "
@@ -1673,38 +1622,6 @@ class AnalyzedDataReader(object):
                        hydro_ev_bound_high, urqmd_ev_bound_high,
                        pT_2_range[0], pT_2_range[1])
                 ).fetchall())
-                ref_1_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag from %s "
-                    "where pid = %d and weight_type = '1' and n = %d and "
-                    "((hydro_event_id = %d and urqmd_event_id >= %d) "
-                    " or (%d < hydro_event_id and hydro_event_id < %d) "
-                    " or (hydro_event_id = %d and urqmd_event_id < %d))"
-                    % (analyzed_table_name_inte, pid, n1,
-                       hydro_ev_bound_low, urqmd_ev_bound_low, 
-                       hydro_ev_bound_low, hydro_ev_bound_high, 
-                       hydro_ev_bound_high, urqmd_ev_bound_high)
-                ).fetchall())
-                ref_2_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag from %s "
-                    "where pid = %d and weight_type = '1' and n = %d and "
-                    "((hydro_event_id = %d and urqmd_event_id >= %d) "
-                    " or (%d < hydro_event_id and hydro_event_id < %d) "
-                    " or (hydro_event_id = %d and urqmd_event_id < %d))"
-                    % (analyzed_table_name_inte, pid, n2,
-                       hydro_ev_bound_low, urqmd_ev_bound_low, 
-                       hydro_ev_bound_low, hydro_ev_bound_high, 
-                       hydro_ev_bound_high, urqmd_ev_bound_high)
-                ).fetchall())
-            resolutionFactor_1 += sum((ref_1_data[:,0]*ref_1_data[:,2] 
-                                       + ref_1_data[:,1]*ref_1_data[:,3])**c1)
-            resolutionFactor_2 += sum((ref_2_data[:,0]*ref_2_data[:,2] 
-                                       + ref_2_data[:,1]*ref_2_data[:,3])**c2)
-            resolutionFactor_1_imag += sum((ref_1_data[:,1]*ref_1_data[:,2] 
-                                       - ref_1_data[:,0]*ref_1_data[:,3])**c1)
-            resolutionFactor_2_imag += sum((ref_2_data[:,1]*ref_2_data[:,2] 
-                                       - ref_2_data[:,0]*ref_2_data[:,3])**c2)
-            nev_resolution_1 += len(ref_1_data[:,0])
-            nev_resolution_2 += len(ref_2_data[:,0])
             temp_nev = int(len(temp_1_data[:,0])/npT_1)
             for iev in range(temp_nev):
                 ev_1_data = temp_1_data[iev*npT_1:(iev+1)*npT_1, :]
@@ -1717,27 +1634,61 @@ class AnalyzedDataReader(object):
                 pTinte_Qn_1_x = sum(ev_1_data[:,1]*ev_1_data[:,2])/nparticle_1
                 pTinte_Qn_1_y = sum(ev_1_data[:,1]*ev_1_data[:,3])/nparticle_1
 
+                pTinte_Qn_ref_1_x = (
+                    sum(ev_1_data[:,1]*ev_1_data[:,4])/nparticle_1)
+                pTinte_Qn_ref_1_y = (
+                    sum(ev_1_data[:,1]*ev_1_data[:,5])/nparticle_1)
+                
                 pTinte_Qn_1 = sqrt(pTinte_Qn_1_x**2. + pTinte_Qn_1_y**2)
                 pTinte_Qn_1_psi  = arctan2(pTinte_Qn_1_y, pTinte_Qn_1_x)/n1
+                
+                pTinte_Qn_ref_1 = sqrt(pTinte_Qn_ref_1_x**2. 
+                                       + pTinte_Qn_ref_1_y**2)
+                pTinte_Qn_ref_1_psi  = arctan2(pTinte_Qn_ref_1_y, 
+                                               pTinte_Qn_ref_1_x)/n1
 
                 pTinte_Qn_2_x = sum(ev_2_data[:,1]*ev_2_data[:,2])/nparticle_2
                 pTinte_Qn_2_y = sum(ev_2_data[:,1]*ev_2_data[:,3])/nparticle_2
+                
+                pTinte_Qn_ref_2_x = (
+                    sum(ev_2_data[:,1]*ev_2_data[:,4])/nparticle_2)
+                pTinte_Qn_ref_2_y = (
+                    sum(ev_2_data[:,1]*ev_2_data[:,5])/nparticle_2)
 
                 pTinte_Qn_2 = sqrt(pTinte_Qn_2_x**2. + pTinte_Qn_2_y**2)
                 pTinte_Qn_2_psi  = arctan2(pTinte_Qn_2_y, pTinte_Qn_2_x)/n2
+                
+                pTinte_Qn_ref_2 = sqrt(pTinte_Qn_ref_2_x**2
+                                       + pTinte_Qn_ref_2_y**2)
+                pTinte_Qn_ref_2_psi  = arctan2(pTinte_Qn_ref_2_y, 
+                                               pTinte_Qn_ref_2_x)/n2
                 
                 temp_real = (pTinte_Qn_1**c1*pTinte_Qn_2**c2
                            *cos(n1*c1*pTinte_Qn_1_psi - n2*c2*pTinte_Qn_2_psi))
                 temp_imag = (pTinte_Qn_1**c1*pTinte_Qn_2**c2
                            *sin(n1*c1*pTinte_Qn_1_psi - n2*c2*pTinte_Qn_2_psi))
+
                 rn_real += temp_real
-                rn_real_err += temp_real**2.
+                rn_real_err += temp_real**2
                 rn_imag += temp_imag
-                rn_imag_err += temp_imag**2.
-        resolutionFactor_1 = sqrt(resolutionFactor_1/nev_resolution_1)
-        resolutionFactor_2 = sqrt(resolutionFactor_2/nev_resolution_2)
-        resolutionFactor_1_imag = resolutionFactor_1_imag/nev_resolution_1
-        resolutionFactor_2_imag = resolutionFactor_2_imag/nev_resolution_2
+                rn_imag_err += temp_imag**2
+
+                resolutionFactor_1 += (pTinte_Qn_1**c1*pTinte_Qn_ref_1**c1
+                                       *cos(n1*c1*(pTinte_Qn_1_psi 
+                                                   - pTinte_Qn_ref_1_psi)))
+                resolutionFactor_2 += (pTinte_Qn_2**c2*pTinte_Qn_ref_2**c2
+                                       *cos(n2*c2*(pTinte_Qn_2_psi 
+                                                   - pTinte_Qn_ref_2_psi)))
+                resolutionFactor_1_imag += (pTinte_Qn_1**c1*pTinte_Qn_ref_1**c1
+                                            *sin(n1*c1*(pTinte_Qn_1_psi 
+                                                       - pTinte_Qn_ref_1_psi)))
+                resolutionFactor_2_imag += (pTinte_Qn_2**c2*pTinte_Qn_ref_2**c2
+                                            *sin(n2*c2*(pTinte_Qn_2_psi 
+                                                       - pTinte_Qn_ref_2_psi)))
+        resolutionFactor_1 = sqrt(resolutionFactor_1/nev)
+        resolutionFactor_2 = sqrt(resolutionFactor_2/nev)
+        resolutionFactor_1_imag = resolutionFactor_1_imag/nev
+        resolutionFactor_2_imag = resolutionFactor_2_imag/nev
         rn_real = rn_real/nev
         rn_imag = rn_imag/nev
         rn_real_err = sqrt(rn_real_err/nev - rn_real**2)/sqrt(nev-1)
