@@ -1177,7 +1177,7 @@ class AnalyzedDataReader(object):
                 "n1*c1 + n2*c2 = %d != 0!" % (n1*c1 + n2*c2))
         if method not in  ['event_plane', 'scalar_product']:
             raise ValueError(
-                "AnalyzedDataReader.get_ptinte_three_flow_correlation: "
+                "AnalyzedDataReader.get_ptinte_two_flow_correlation: "
                 "invalid method : %s" % method)
         print("collect pT integrated flow two-plane correlation "
               "according to %s method ..." % method)
