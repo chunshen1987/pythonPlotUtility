@@ -675,7 +675,8 @@ class AnalyzedDataReader(object):
                        urqmd_ev_bound_high)
                 ).fetchall())
                 ref_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag from %s "
+                    "select QnA_real, QnA_imag, QnB_real, QnB_imag, "
+                    "QnC_real, QnC_imag, QnD_real, QnD_imag from %s "
                     "where pid = 1 and weight_type = '1' and n = %d and "
                     "hydro_event_id = %d and "
                     "(%d <= urqmd_event_id and urqmd_event_id < %d)"
@@ -695,7 +696,8 @@ class AnalyzedDataReader(object):
                        hydro_ev_bound_high, urqmd_ev_bound_high)
                 ).fetchall())
                 ref_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag from %s "
+                    "select QnA_real, QnA_imag, QnB_real, QnB_imag, "
+                    "QnC_real, QnC_imag, QnD_real, QnD_imag from %s "
                     "where pid = 1 and weight_type = '1' and n = %d and "
                     "((hydro_event_id = %d and urqmd_event_id >= %d) "
                     " or (%d < hydro_event_id and hydro_event_id < %d) "
@@ -705,11 +707,15 @@ class AnalyzedDataReader(object):
                        hydro_ev_bound_high, hydro_ev_bound_high, 
                        urqmd_ev_bound_high)
                 ).fetchall())
-            ref_QnA = sqrt(ref_data[:,0]**2. + ref_data[:,1]**2)
-            ref_QnB = sqrt(ref_data[:,2]**2. + ref_data[:,3]**2)
+            ref_Qn_AC_real = 0.5*(ref_data[:,0] + ref_data[:,4])
+            ref_Qn_AC_imag = 0.5*(ref_data[:,1] + ref_data[:,5])
+            ref_Qn_BD_real = 0.5*(ref_data[:,2] + ref_data[:,6])
+            ref_Qn_BD_imag = 0.5*(ref_data[:,3] + ref_data[:,7])
+            ref_QnAC = sqrt(ref_Qn_AC_real**2. + ref_Qn_AC_imag**2)
+            ref_QnBD = sqrt(ref_Qn_BD_real**2. + ref_Qn_BD_imag**2)
             resolutionFactor += sum(
-                (ref_data[:,0]*ref_data[:,2] + ref_data[:,1]*ref_data[:,3])
-                /ref_QnA/ref_QnB)
+                (ref_Qn_AC_real*ref_Qn_BD_real + ref_Qn_AC_imag*ref_Qn_BD_imag)
+                /ref_QnAC/ref_QnBD)
             nev_resolution += len(ref_data[:,0])
             for ipT in range(npT):
                 single_pT_data = temp_data[ipT::npT, :]
@@ -719,11 +725,11 @@ class AnalyzedDataReader(object):
                 nev_pT[ipT] += len(single_pT_data[single_pT_data[:,1]>0,1])
 
                 temp_real = (
-                    (single_pT_data[:,2]*ref_data[:,0] 
-                     + single_pT_data[:,3]*ref_data[:,1])/ref_QnA)
+                    (single_pT_data[:,2]*ref_Qn_AC_real
+                     + single_pT_data[:,3]*ref_Qn_AC_imag)/ref_QnAC)
                 temp_imag = (
-                    (single_pT_data[:,3]*ref_data[:,0]
-                     + single_pT_data[:,2]*ref_data[:,1])/ref_QnA)
+                    (single_pT_data[:,3]*ref_Qn_AC_real
+                     + single_pT_data[:,2]*ref_Qn_AC_imag)/ref_QnAC)
                 vn_real[ipT] += sum(temp_real)
                 vn_imag[ipT] += sum(temp_imag)
                 vn_real_err[ipT] += sum(temp_real**2.)
@@ -800,7 +806,8 @@ class AnalyzedDataReader(object):
                        urqmd_ev_bound_high, pT_range[0], pT_range[1])
                 ).fetchall())
                 ref_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag from %s "
+                    "select QnA_real, QnA_imag, QnB_real, QnB_imag, "
+                    "QnC_real, QnC_imag, QnD_real, QnD_imag from %s "
                     "where pid = 1 and weight_type = '1' and n = %d and "
                     "hydro_event_id = %d and "
                     "(%d <= urqmd_event_id and urqmd_event_id < %d)"
@@ -822,7 +829,8 @@ class AnalyzedDataReader(object):
                        pT_range[0], pT_range[1])
                 ).fetchall())
                 ref_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag from %s "
+                    "select QnA_real, QnA_imag, QnB_real, QnB_imag, "
+                    "QnC_real, QnC_imag, QnD_real, QnD_imag from %s "
                     "where pid = 1 and weight_type = '1' and n = %d and "
                     "((hydro_event_id = %d and urqmd_event_id >= %d) "
                     " or (%d < hydro_event_id and hydro_event_id < %d) "
@@ -832,16 +840,21 @@ class AnalyzedDataReader(object):
                        hydro_ev_bound_high, hydro_ev_bound_high, 
                        urqmd_ev_bound_high)
                 ).fetchall())
+            ref_Qn_AC_real = 0.5*(ref_data[:,0] + ref_data[:,4])
+            ref_Qn_AC_imag = 0.5*(ref_data[:,1] + ref_data[:,5])
+            ref_Qn_BD_real = 0.5*(ref_data[:,2] + ref_data[:,6])
+            ref_Qn_BD_imag = 0.5*(ref_data[:,3] + ref_data[:,7])
+            ref_QnAC = sqrt(ref_Qn_AC_real**2. + ref_Qn_AC_imag**2)
+            ref_QnBD = sqrt(ref_Qn_BD_real**2. + ref_Qn_BD_imag**2)
 
-            ref_QnA = sqrt(ref_data[:,0]**2 + ref_data[:,1]**2)
-            ref_QnB = sqrt(ref_data[:,2]**2 + ref_data[:,3]**2)
             resolutionFactor += sum(
-                (ref_data[:,0]*ref_data[:,2] + ref_data[:,1]*ref_data[:,3])
-                /ref_QnA/ref_QnB)
+                (ref_Qn_AC_real*ref_Qn_BD_real + ref_Qn_AC_imag*ref_Qn_BD_imag)
+                /ref_QnAC/ref_QnBD)
             resolutionFactor_imag += sum(
-                (ref_data[:,1]*ref_data[:,2] - ref_data[:,0]*ref_data[:,3])
-                /ref_QnA/ref_QnB)
+                (ref_Qn_AC_imag*ref_Qn_BD_real - ref_Qn_AC_real*ref_Qn_BD_imag)
+                /ref_QnAC/ref_QnBD)
             nev_resolution += len(ref_data[:,0])
+            
             vn_avg[0] += sum(temp_data[:,0]*temp_data[:,1]) #<pT>
             totalN += sum(temp_data[:,1])
             temp_nev = int(len(temp_data[:,0])/npT)
@@ -852,10 +865,10 @@ class AnalyzedDataReader(object):
                 nev += 1
                 pTinte_Qn_x = sum(ev_data[:,1]*ev_data[:,2])/nparticle
                 pTinte_Qn_y = sum(ev_data[:,1]*ev_data[:,2])/nparticle
-                temp_real = (pTinte_Qn_x*ref_data[iev,0] 
-                             + pTinte_Qn_y*ref_data[iev,1])/ref_QnA[iev]
-                temp_imag = (pTinte_Qn_y*ref_data[iev,0] 
-                             - pTinte_Qn_x*ref_data[iev,1])/ref_QnA[iev]
+                temp_real = (pTinte_Qn_x*ref_Qn_AC_real[iev]
+                             + pTinte_Qn_y*ref_Qn_AC_imag[iev])/ref_QnAC[iev]
+                temp_imag = (pTinte_Qn_y*ref_Qn_AC_real[iev]
+                             - pTinte_Qn_x*ref_Qn_AC_imag[iev])/ref_QnAC[iev]
                 vn_real += temp_real
                 vn_imag += temp_imag
                 vn_real_err += temp_real**2.
@@ -920,7 +933,8 @@ class AnalyzedDataReader(object):
                        urqmd_ev_bound_high)
                 ).fetchall())
                 ref_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag from %s "
+                    "select QnA_real, QnA_imag, QnB_real, QnB_imag, "
+                    "QnC_real, QnC_imag, QnD_real, QnD_imag from %s "
                     "where pid = 1 and weight_type = '1' and n = %d and "
                     "hydro_event_id = %d and "
                     "(%d <= urqmd_event_id and urqmd_event_id < %d)"
@@ -940,7 +954,8 @@ class AnalyzedDataReader(object):
                        hydro_ev_bound_high, urqmd_ev_bound_high)
                 ).fetchall())
                 ref_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag from %s "
+                    "select QnA_real, QnA_imag, QnB_real, QnB_imag, "
+                    "QnC_real, QnC_imag, QnD_real, QnD_imag from %s "
                     "where pid = 1 and weight_type = '1' and n = %d and "
                     "((hydro_event_id = %d and urqmd_event_id >= %d) "
                     " or (%d < hydro_event_id and hydro_event_id < %d) "
@@ -950,8 +965,13 @@ class AnalyzedDataReader(object):
                        hydro_ev_bound_high, hydro_ev_bound_high, 
                        urqmd_ev_bound_high)
                 ).fetchall())
-            vn_ch_rms += sum(ref_data[:,0]*ref_data[:,2] 
-                             + ref_data[:,1]*ref_data[:,3])
+            ref_Qn_AC_real = 0.5*(ref_data[:,0] + ref_data[:,4])
+            ref_Qn_AC_imag = 0.5*(ref_data[:,1] + ref_data[:,5])
+            ref_Qn_BD_real = 0.5*(ref_data[:,2] + ref_data[:,6])
+            ref_Qn_BD_imag = 0.5*(ref_data[:,3] + ref_data[:,7])
+            vn_ch_rms += sum(ref_Qn_AC_real*ref_Qn_BD_real 
+                             + ref_Qn_AC_imag*ref_Qn_BD_imag)
+
             nev_vn_ch += len(ref_data[:,0])
             for ipT in range(npT):
                 single_pT_data = temp_data[ipT::npT, :]
@@ -960,14 +980,15 @@ class AnalyzedDataReader(object):
 
                 nev_pT[ipT] += len(single_pT_data[single_pT_data[:,1]>0,1])
 
-                temp_real = (single_pT_data[:,2]*ref_data[:,0]
-                             + single_pT_data[:,3]*ref_data[:,1])
-                temp_imag = (single_pT_data[:,3]*ref_data[:,0]
-                             + single_pT_data[:,2]*ref_data[:,1])
+                temp_real = (single_pT_data[:,2]*ref_Qn_AC_real
+                             + single_pT_data[:,3]*ref_Qn_AC_imag)
+                temp_imag = (single_pT_data[:,3]*ref_Qn_AC_real
+                             + single_pT_data[:,2]*ref_Qn_AC_imag)
                 vn_real[ipT] += sum(temp_real)
                 vn_imag[ipT] += sum(temp_imag)
                 vn_real_err[ipT] += sum(temp_real**2.)
                 vn_imag_err[ipT] += sum(temp_imag**2.)
+
         vn_ch_rms = sqrt(vn_ch_rms/nev_vn_ch)
         vn_avg[:,0] = vn_avg[:,0]/totalN
         vn_real = vn_real/nev_pT
@@ -1041,7 +1062,8 @@ class AnalyzedDataReader(object):
                        urqmd_ev_bound_high, pT_range[0], pT_range[1])
                 ).fetchall())
                 ref_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag from %s "
+                    "select QnA_real, QnA_imag, QnB_real, QnB_imag, "
+                    "QnC_real, QnC_imag, QnD_real, QnD_imag from %s "
                     "where pid = 1 and weight_type = '1' and n = %d and "
                     "hydro_event_id = %d and "
                     "(%d <= urqmd_event_id and urqmd_event_id < %d)"
@@ -1063,7 +1085,8 @@ class AnalyzedDataReader(object):
                        pT_range[0], pT_range[1])
                 ).fetchall())
                 ref_data = array(self.db.executeSQLquery(
-                    "select QnA_real, QnA_imag, QnB_real, QnB_imag from %s "
+                    "select QnA_real, QnA_imag, QnB_real, QnB_imag, "
+                    "QnC_real, QnC_imag, QnD_real, QnD_imag from %s "
                     "where pid = 1 and weight_type = '1' and n = %d and "
                     "((hydro_event_id = %d and urqmd_event_id >= %d) "
                     " or (%d < hydro_event_id and hydro_event_id < %d) "
@@ -1073,10 +1096,15 @@ class AnalyzedDataReader(object):
                        hydro_ev_bound_high, hydro_ev_bound_high, 
                        urqmd_ev_bound_high)
                 ).fetchall())
-            vn_ch_rms += sum(ref_data[:,0]*ref_data[:,2] 
-                             + ref_data[:,1]*ref_data[:,3])
-            vn_ch_rms_imag += sum(ref_data[:,1]*ref_data[:,2]
-                                  - ref_data[:,0]*ref_data[:,3])
+            ref_Qn_AC_real = 0.5*(ref_data[:,0] + ref_data[:,4])
+            ref_Qn_AC_imag = 0.5*(ref_data[:,1] + ref_data[:,5])
+            ref_Qn_BD_real = 0.5*(ref_data[:,2] + ref_data[:,6])
+            ref_Qn_BD_imag = 0.5*(ref_data[:,3] + ref_data[:,7])
+            vn_ch_rms += sum(ref_Qn_AC_real*ref_Qn_BD_real 
+                             + ref_Qn_AC_imag*ref_Qn_BD_imag)
+            vn_ch_rms_imag += sum(ref_Qn_AC_imag*ref_Qn_BD_real
+                                  - ref_Qn_AC_real*ref_Qn_BD_imag)
+
             nev_vn_ch += len(ref_data[:,0])
             vn_avg[0] += sum(temp_data[:,0]*temp_data[:,1]) #<pT>
             totalN += sum(temp_data[:,1])
@@ -1089,14 +1117,15 @@ class AnalyzedDataReader(object):
                 # sum of pT bins to construct for pT integrated Qn
                 pTinte_Qn_x = sum(ev_data[:,1]*ev_data[:,2])/nparticle
                 pTinte_Qn_y = sum(ev_data[:,1]*ev_data[:,2])/nparticle
-                temp_real = (pTinte_Qn_x*ref_data[iev,0] 
-                             + pTinte_Qn_y*ref_data[iev,1])
-                temp_imag = (pTinte_Qn_y*ref_data[iev,0]
-                             - pTinte_Qn_x*ref_data[iev,1])
+                temp_real = (pTinte_Qn_x*ref_Qn_AC_real[iev]
+                             + pTinte_Qn_y*ref_Qn_AC_imag[iev])
+                temp_imag = (pTinte_Qn_y*ref_Qn_AC_real[iev]
+                             - pTinte_Qn_x*ref_Qn_AC_imag[iev])
                 vn_real += temp_real
                 vn_imag += temp_imag
                 vn_real_err += temp_real**2.
                 vn_imag_err += temp_imag**2.
+
         vn_ch_rms = sqrt(vn_ch_rms/nev_vn_ch)
         vn_ch_rms_imag = vn_ch_rms_imag/nev_vn_ch
         vn_avg[0] = vn_avg[0]/totalN
