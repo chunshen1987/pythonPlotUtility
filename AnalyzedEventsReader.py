@@ -1421,7 +1421,7 @@ class AnalyzedDataReader(object):
                 temp_1_data = array(self.db.executeSQLquery(
                     "select pT, Nparticle_sub, QnA_real, QnA_imag, "
                     "QnC_real, QnC_imag, QnB_real, QnB_imag, QnD_real, "
-                    "QnD_imag, from %s "
+                    "QnD_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "hydro_event_id = %d and "
                     "(%d <= urqmd_event_id and urqmd_event_id < %d) and "
@@ -1625,7 +1625,7 @@ class AnalyzedDataReader(object):
                 temp_1_data = array(self.db.executeSQLquery(
                     "select pT, Nparticle_sub, QnA_real, QnA_imag, "
                     "QnC_real, QnC_imag, QnB_real, QnB_imag, QnD_real, "
-                    "QnD_imag, from %s "
+                    "QnD_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "hydro_event_id = %d and "
                     "(%d <= urqmd_event_id and urqmd_event_id < %d) and "
@@ -1779,11 +1779,9 @@ class AnalyzedDataReader(object):
                 /(sqrt(<(Q_nA1/|Q_nA1|*conj(Q_nB1/|Q_nB1|))^c1>_ev)
                   *sqrt(<(Q_nA2/|Q_nA2|*conj(Q_nB2/|Q_nB2|))^c2>_ev)
                   *sqrt(<(Q_nA3/|Q_nA3|*conj(Q_nB3/|Q_nB3|))^c3>_ev))
-            Q_n1 and Q_n3 are taken from two subevents at forward and backward
-            rapidities (rap > 0.5 and rap < -0.5)
-            Q_n2 is taken at mid-rapidity -0.5 <= rap <= 0.5
-            In order to calculate resolution factor, we use QnA and QnB vectors 
-            from two different UrQMD events but from the same hydro event
+            Q_n1 and Q_n2 are taken from two subevents at forward and backward
+            rapidities (-1.5 < rap < -0.5 and 0.5 < rap < 1.5)
+            Q_n3 is taken at mid-rapidity -2.5 <= rap < -1.5
 
             This function will return 
                 (rn_real, rn_real_err, rn_imag, rn_imag_err)
@@ -1799,19 +1797,16 @@ class AnalyzedDataReader(object):
               % (c1, n1, c2, n2, c3, n3, particle_name, 
                  pT_1_range[0], pT_1_range[1], pT_2_range[0], pT_2_range[1],
                  pT_3_range[0], pT_3_range[1]))
-        conjFlag_1 = False
-        conjFlag_2 = False
-        conjFlag_3 = False
-        if n1 < 0: conjFlag_1 = True
-        if n2 < 0: conjFlag_2 = True
-        if n3 < 0: conjFlag_3 = True
+        conjFlags = ones(3)
+        if n1 < 0: conjFlags[0] = -1
+        if n2 < 0: conjFlags[1] = -1
+        if n3 < 0: conjFlags[2] = -1
         n1 = abs(n1)
         n2 = abs(n2)
         n3 = abs(n3)
 
         pid = self.pid_lookup[particle_name]
         analyzed_table_name_diff = 'flow_Qn_vectors_pTdiff'
-        analyzed_table_name_inte = 'flow_Qn_vectors'
 
         rn_avg = zeros(4) # record final results
         rn_real = 0.0
@@ -1839,6 +1834,13 @@ class AnalyzedDataReader(object):
             "n = %d and (%g <= pT and pT <= %g)" 
             % (analyzed_table_name_diff, 1, 1, pid, n2, pT_2_range[0], 
                pT_2_range[1])
+        ).fetchall())
+        npT_3 = len(self.db.executeSQLquery(
+            "select pT from %s where hydro_event_id = %d and "
+            "urqmd_event_id = %d and pid = %d and weight_type = '1' and "
+            "n = %d and (%g <= pT and pT <= %g)" 
+            % (analyzed_table_name_diff, 1, 1, pid, n3, pT_3_range[0], 
+               pT_3_range[1])
         ).fetchall())
 
         #fetch data
@@ -1872,6 +1874,17 @@ class AnalyzedDataReader(object):
                        hydro_ev_bound_low, urqmd_ev_bound_low, 
                        urqmd_ev_bound_high, pT_2_range[0], pT_2_range[1])
                 ).fetchall())
+                temp_3_data = array(self.db.executeSQLquery(
+                    "select pT, Nparticle_sub, QnC_real, QnC_imag, "
+                    "QnD_real, QnD_imag from %s "
+                    "where pid = %d and weight_type = '1' and n = %d and "
+                    "hydro_event_id = %d and "
+                    "(%d <= urqmd_event_id and urqmd_event_id < %d) and "
+                    "(%g <= pT and pT <= %g)"
+                    % (analyzed_table_name_diff, pid, n3, 
+                       hydro_ev_bound_low, urqmd_ev_bound_low, 
+                       urqmd_ev_bound_high, pT_3_range[0], pT_3_range[1])
+                ).fetchall())
             else:
                 temp_1_data = array(self.db.executeSQLquery(
                     "select pT, Nparticle_sub, QnA_real, QnA_imag, "
@@ -1901,14 +1914,31 @@ class AnalyzedDataReader(object):
                        hydro_ev_bound_high, urqmd_ev_bound_high,
                        pT_2_range[0], pT_2_range[1])
                 ).fetchall())
+                temp_3_data = array(self.db.executeSQLquery(
+                    "select pT, Nparticle_sub, QnC_real, QnC_imag, "
+                    "QnD_real, QnD_imag from %s "
+                    "where pid = %d and weight_type = '1' and n = %d and "
+                    "((hydro_event_id = %d and urqmd_event_id >= %d) "
+                    " or (%d < hydro_event_id and hydro_event_id < %d) "
+                    " or (hydro_event_id = %d and urqmd_event_id < %d)) and "
+                    "(%g <= pT and pT <= %g)"
+                    % (analyzed_table_name_diff, pid, n2,
+                       hydro_ev_bound_low, urqmd_ev_bound_low, 
+                       hydro_ev_bound_low, hydro_ev_bound_high, 
+                       hydro_ev_bound_high, urqmd_ev_bound_high,
+                       pT_2_range[0], pT_2_range[1])
+                ).fetchall())
             temp_nev = int(len(temp_1_data[:,0])/npT_1)
             for iev in range(temp_nev):
                 ev_1_data = temp_1_data[iev*npT_1:(iev+1)*npT_1, :]
                 ev_2_data = temp_2_data[iev*npT_2:(iev+1)*npT_2, :]
+                ev_3_data = temp_3_data[iev*npT_3:(iev+1)*npT_3, :]
                 nparticle_1 = sum(ev_1_data[:,1])
                 nparticle_2 = sum(ev_2_data[:,1])
+                nparticle_3 = sum(ev_3_data[:,1])
                 if nparticle_1 < 1: continue
                 if nparticle_2 < 1: continue
+                if nparticle_3 < 1: continue
                 nev += 1
                 pTinte_Qn_1_x = sum(ev_1_data[:,1]*ev_1_data[:,2])/nparticle_1
                 pTinte_Qn_1_y = sum(ev_1_data[:,1]*ev_1_data[:,3])/nparticle_1
@@ -1941,8 +1971,34 @@ class AnalyzedDataReader(object):
                 pTinte_Qn_ref_2_psi  = arctan2(pTinte_Qn_ref_2_y, 
                                                pTinte_Qn_ref_2_x)/n2
                 
-                temp_real = cos(n1*c1*pTinte_Qn_1_psi - n2*c2*pTinte_Qn_2_psi)
-                temp_imag = sin(n1*c1*pTinte_Qn_1_psi - n2*c2*pTinte_Qn_2_psi)
+                pTinte_Qn_3_x = sum(ev_3_data[:,1]*ev_3_data[:,2])/nparticle_3
+                pTinte_Qn_3_y = sum(ev_3_data[:,1]*ev_3_data[:,3])/nparticle_3
+
+                pTinte_Qn_ref_3_x = (
+                    sum(ev_3_data[:,1]*ev_3_data[:,4])/nparticle_3)
+                pTinte_Qn_ref_3_y = (
+                    sum(ev_3_data[:,1]*ev_3_data[:,5])/nparticle_3)
+
+                pTinte_Qn_3 = sqrt(pTinte_Qn_3_x**2. + pTinte_Qn_3_y**2)
+                pTinte_Qn_3_psi = arctan2(pTinte_Qn_3_y, pTinte_Qn_3_x)/n3
+                
+                pTinte_Qn_ref_3 = sqrt(pTinte_Qn_ref_3_x**2. 
+                                       + pTinte_Qn_ref_3_y**2)
+                pTinte_Qn_ref_3_psi  = arctan2(pTinte_Qn_ref_3_y, 
+                                               pTinte_Qn_ref_3_x)/n3
+                
+                temp_real = (cos(conjFlags[0]*n1*c1*pTinte_Qn_1_psi 
+                                 + conjFlags[1]*n2*c2*pTinte_Qn_2_psi
+                                 + conjFlags[2]*n3*c2*pTinte_Qn_3_psi)
+                            + cos(conjFlags[0]*n1*c1*pTinte_Qn_ref_1_psi 
+                                  + conjFlags[1]*n2*c2*pTinte_Qn_ref_2_psi
+                                  + conjFlags[2]*n3*c2*pTinte_Qn_3_psi))
+                temp_imag = (sin(conjFlags[0]*n1*c1*pTinte_Qn_1_psi 
+                                 + conjFlags[1]*n2*c2*pTinte_Qn_2_psi
+                                 + conjFlags[2]*n3*c3*pTinte_Qn_3_psi)
+                             + sin(conjFlags[0]*n1*c1*pTinte_Qn_ref_1_psi 
+                                 + conjFlags[1]*n2*c2*pTinte_Qn_ref_2_psi
+                                 + conjFlags[2]*n3*c3*pTinte_Qn_3_psi))
 
                 rn_real += temp_real
                 rn_real_err += temp_real**2.
@@ -1953,25 +2009,36 @@ class AnalyzedDataReader(object):
                                                  - pTinte_Qn_1_psi))
                 resolutionFactor_2 += cos(n2*c2*(pTinte_Qn_2_psi 
                                                  - pTinte_Qn_ref_2_psi))
+                resolutionFactor_3 += cos(n3*c3*(pTinte_Qn_3_psi 
+                                                 - pTinte_Qn_ref_3_psi))
                 resolutionFactor_1_imag += sin(n1*c1*(pTinte_Qn_ref_1_psi 
                                                       - pTinte_Qn_1_psi))
                 resolutionFactor_2_imag += sin(n2*c2*(pTinte_Qn_2_psi 
                                                       - pTinte_Qn_ref_2_psi))
+                resolutionFactor_3_imag += sin(n3*c3*(pTinte_Qn_3_psi 
+                                                      - pTinte_Qn_ref_3_psi))
         resolutionFactor_1 = sqrt(resolutionFactor_1/nev)
         resolutionFactor_2 = sqrt(resolutionFactor_2/nev)
+        resolutionFactor_3 = sqrt(resolutionFactor_3/nev)
         resolutionFactor_1_imag = resolutionFactor_1_imag/nev
         resolutionFactor_2_imag = resolutionFactor_2_imag/nev
+        resolutionFactor_3_imag = resolutionFactor_3_imag/nev
         rn_real = rn_real/nev
         rn_imag = rn_imag/nev
         rn_real_err = sqrt(rn_real_err/nev - rn_real**2)/sqrt(nev-1)
         rn_imag_err = sqrt(rn_imag_err/nev - rn_imag**2)/sqrt(nev-1)
 
-        rn_avg[0] = rn_real/resolutionFactor_1/resolutionFactor_2
-        rn_avg[1] = rn_real_err/resolutionFactor_1/resolutionFactor_2
-        rn_avg[2] = rn_imag/resolutionFactor_1/resolutionFactor_2
-        rn_avg[3] = rn_imag_err/resolutionFactor_1/resolutionFactor_2
+        rn_avg[0] = (rn_real/(2.*resolutionFactor_1
+                              *resolutionFactor_2*resolutionFactor_3))
+        rn_avg[1] = (rn_real_err/(2.*resolutionFactor_1
+                                  *resolutionFactor_2*resolutionFactor_3))
+        rn_avg[2] = (rn_imag/(2.*resolutionFactor_1
+                              *resolutionFactor_2*resolutionFactor_3))
+        rn_avg[3] = (rn_imag_err/(2.*resolutionFactor_1
+                                  *resolutionFactor_2*resolutionFactor_3))
         
         return rn_avg
+
 def printHelpMessageandQuit():
     print "Usage : "
     print "AnalyzedDataReader.py databaseName"
@@ -1983,15 +2050,15 @@ if __name__ == "__main__":
     test = AnalyzedDataReader(str(argv[1]))
     print(test.get_ptinte_two_flow_correlation_ep('pion_p', 2, -2))
     print(test.get_ptinte_two_flow_correlation_sp('pion_p', 2, -2))
-    #print(test.get_avg_diffvn_flow('pion_p', 2, 
-    #    pT_range = linspace(0.0, 2.0, 21)))
-    #print(test.get_avg_intevn_flow('pion_p', 2, pT_range = (0.3, 3.0)))
-    #print(test.get_event_plane_diffvn_flow('pion_p', 2, 
-    #    pT_range = linspace(0.0, 2.0, 21)))
-    #print(test.get_event_plane_intevn_flow('pion_p', 2, pT_range = (0.3, 3.0)))
-    #print(test.get_scalar_product_diffvn_flow('pion_p', 2, 
-    #    pT_range = linspace(0.0, 2.0, 21)))
-    #print(test.get_scalar_product_intevn_flow('pion_p', 2, pT_range = (0.3, 3.0)))
+    print(test.get_avg_diffvn_flow('pion_p', 2, 
+        pT_range = linspace(0.0, 2.0, 21)))
+    print(test.get_avg_intevn_flow('pion_p', 2, pT_range = (0.3, 3.0)))
+    print(test.get_event_plane_diffvn_flow('pion_p', 2, 
+        pT_range = linspace(0.0, 2.0, 21)))
+    print(test.get_event_plane_intevn_flow('pion_p', 2, pT_range = (0.3, 3.0)))
+    print(test.get_scalar_product_diffvn_flow('pion_p', 2, 
+        pT_range = linspace(0.0, 2.0, 21)))
+    print(test.get_scalar_product_intevn_flow('pion_p', 2, pT_range = (0.3, 3.0)))
     #print(test.get_diffvn_2pc_flow('pion_p', 2, 
     #    pT_range = linspace(0.0, 2.0, 21)))
     #print(test.get_intevn_2pc_flow('pion_p', 2, pT_range = (0.3, 3.0)))

@@ -641,15 +641,14 @@ class ParticleReader(object):
         
     def collect_flow_Qn_vectors(self, particle_name):
         """
-            collect nth order flow Qn vector and sub-event QnA, QnB vectors
-            for all the events. n is from 1 to 6
+            collect nth order flow Qn vector and sub-event QnA, QnB, QnC, QnD
+            vectors for all the events. n is from 1 to 6
             Qn := 1/Nparticle * sum_i exp[i*n*phi_i]
-            Qn are calculated using particles with 
-                              -0.5 <= y or eta <= 0.5 
-            QnA are calculated using particles with 
-                               0.5 < y or eta < self.rapmax
-            QnB is calculated using particles with 
-                            - self.rapmax < y or eta < -0.5
+            Qn is taken particles havging -0.5 <= rap <= 0.5
+            QnA is taken particles having -1.5 <= rap < -0.5
+            QnB is taken particles having 0.5 < rap <= 1.5
+            QnC is taken particles having -2.5 <= rap < -1.5
+            QnD is taken particles having 1.5 < rap <= 2.5
             (rapidity is used for identified particles 
              and pseudorapidity is used for all charged particles)
         """
