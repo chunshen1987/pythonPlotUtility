@@ -94,9 +94,6 @@ class ParticleReader(object):
                 self.analyzed_db.insertIntoTable(
                     aTable, self.db.selectFromTable(aTable))
         
-        # set maximum rapidity acceptance 
-        self.rapmax = 10.0
-
     ###########################################################################
     # functions to get number of events
     ########################################################################### 
@@ -463,17 +460,26 @@ class ParticleReader(object):
             return Qn_data, Qn_pTdata for partitle with pid_string with 
             weight_type from one given event
             Qn_data = (n, Nparticle, Qn_real, Qn_imag, Nparticle_sub, 
-                       QnA_real, QnA_imag, QnB_real, QnB_imag)
+                       QnA_real, QnA_imag, QnB_real, QnB_imag,
+                       QnC_real, QnC_imag, QnD_real, QnD_imag)
             Qn_pTdata = (n, pT, Nparticle, Qn_real, Qn_imag, Nparticle_sub, 
-                         QnA_real, QnA_imag, QnB_real, QnB_imag)
+                         QnA_real, QnA_imag, QnB_real, QnB_imag, 
+                         QnC_real, QnC_imag, QnD_real, QnD_imag)
+            Qn is taken particles havging -0.5 <= rap <= 0.5
+            QnA is taken particles having -1.5 <= rap < -0.5
+            QnB is taken particles having 0.5 < rap <= 1.5
+            QnC is taken particles having -2.5 <= rap < -1.5
+            QnD is taken particles having 1.5 < rap <= 2.5
+            Nparticle_sub = min(len(QnA), len(QnB), len(QnC), len(QnD))
         """
+        rap_gap = (0.5, 1,5, 2.5)
         eps = 1e-15
         norder = 6
         npT = 30
         pT_boundaries = linspace(0.0, 3.0, npT+1)
         dpT = pT_boundaries[1] - pT_boundaries[0]
-        Qn_data = zeros([norder, 9])
-        Qn_pTdata = zeros([norder*npT, 10])
+        Qn_data = zeros([norder, 13])
+        Qn_pTdata = zeros([norder*npT, 14])
         for iorder in range(norder):
             Qn_data[iorder,0] = iorder + 1
             for ipT in range(npT):
@@ -502,27 +508,39 @@ class ParticleReader(object):
         idx = []
         idxA = []
         idxB = []
+        idxC = []
+        idxD = []
         idx_pT = [[] for _ in range(npT)]
         idxA_pT = [[] for _ in range(npT)]
         idxB_pT = [[] for _ in range(npT)]
+        idxC_pT = [[] for _ in range(npT)]
+        idxD_pT = [[] for _ in range(npT)]
         for ipart in range(len(pT)):
             pTpos = int((pT[ipart] - pT_boundaries[0])/dpT)
-            if rap[ipart] <= 0.5 and rap[ipart] >= -0.5:
+            # Qn is taken particles havging -0.5 <= rap <= 0.5
+            if rap[ipart] <= rap_gap[0] and rap[ipart] >= - rap_gap[0]:
                 idx.append(ipart)
                 if pTpos < npT: idx_pT[pTpos].append(ipart)
-            if rap[ipart] <= self.rapmax and rap[ipart] > 0.5:
+            # QnA is taken particles having -1.5 <= rap < -0.5
+            elif rap[ipart] < - rap_gap[0] and rap[ipart] >= - rap_gap[1]:
+                idxA.append(ipart)
                 if pTpos < npT: idxA_pT[pTpos].append(ipart)
-            if rap[ipart] < -0.5 and rap[ipart] >= -self.rapmax:
+            # QnB is taken particles having 0.5 < rap <= 1.5
+            elif rap[ipart] <= rap_gap[1]  and rap[ipart] > rap_gap[0]:
+                idxB.append(ipart)
                 if pTpos < npT: idxB_pT[pTpos].append(ipart)
-        for ipT in range(npT):
-            Nparticle_sub_pT = min(len(idxA_pT[ipT]), len(idxB_pT[ipT]))
-            if Nparticle_sub_pT == 0: continue
-            idxA += idxA_pT[ipT][0:Nparticle_sub_pT]
-            idxB += idxB_pT[ipT][0:Nparticle_sub_pT]
+            # QnC is taken particles having -2.5 <= rap < -1.5
+            elif rap[ipart] < - rap_gap[1]  and rap[ipart] >= - rap_gap[2]:
+                idxC.append(ipart)
+                if pTpos < npT: idxC_pT[pTpos].append(ipart)
+            # QnD is taken particles having 1.5 < rap <= 2.5
+            elif rap[ipart] <= rap_gap[2]  and rap[ipart] > rap_gap[1]:
+                idxD.append(ipart)
+                if pTpos < npT: idxD_pT[pTpos].append(ipart)
 
         # calculate Qn vectors
         Nparticle = len(idx)
-        Nparticle_sub = min(len(idxA), len(idxB))
+        Nparticle_sub = min(len(idxA), len(idxB), len(idxC), len(idxD))
         for iorder in range(1, norder+1):
             # Qn vectors at mid rapidity
             temp_Qn_x = sum(weight[idx]*cos(iorder*phi[idx]))
@@ -530,27 +548,45 @@ class ParticleReader(object):
             Qn_data[iorder-1,1] = Nparticle
             Qn_data[iorder-1,2] = temp_Qn_x/(Nparticle + eps)
             Qn_data[iorder-1,3] = temp_Qn_y/(Nparticle + eps)
-            # QnA vectors at forward rapidity
+
+            # sub event Qn vectors
+            Qn_data[iorder-1,4] = Nparticle_sub
+            # QnA vectors at (-1.5, -0.5)
             temp_Qn_x = sum(weight[idxA[0:Nparticle_sub]]
                             *cos(iorder*phi[idxA[0:Nparticle_sub]]))
             temp_Qn_y = sum(weight[idxA[0:Nparticle_sub]]
                             *sin(iorder*phi[idxA[0:Nparticle_sub]]))
-            Qn_data[iorder-1,4] = Nparticle_sub
             Qn_data[iorder-1,5] = temp_Qn_x/(Nparticle_sub + eps)
             Qn_data[iorder-1,6] = temp_Qn_y/(Nparticle_sub + eps)
-            # QnB vector at backward rapidity
+            # QnB vector at (0.5, 1.5)
             temp_Qn_x = sum(weight[idxB[0:Nparticle_sub]]
                             *cos(iorder*phi[idxB[0:Nparticle_sub]]))
             temp_Qn_y = sum(weight[idxB[0:Nparticle_sub]]
                             *sin(iorder*phi[idxB[0:Nparticle_sub]]))
             Qn_data[iorder-1,7] = temp_Qn_x/(Nparticle_sub + eps)
             Qn_data[iorder-1,8] = temp_Qn_y/(Nparticle_sub + eps)
+            # QnC vector at (-2.5, -1.5)
+            temp_Qn_x = sum(weight[idxC[0:Nparticle_sub]]
+                            *cos(iorder*phi[idxC[0:Nparticle_sub]]))
+            temp_Qn_y = sum(weight[idxC[0:Nparticle_sub]]
+                            *sin(iorder*phi[idxC[0:Nparticle_sub]]))
+            Qn_data[iorder-1,9] = temp_Qn_x/(Nparticle_sub + eps)
+            Qn_data[iorder-1,10] = temp_Qn_y/(Nparticle_sub + eps)
+            # QnD vector at (1.5, 2.5)
+            temp_Qn_x = sum(weight[idxD[0:Nparticle_sub]]
+                            *cos(iorder*phi[idxD[0:Nparticle_sub]]))
+            temp_Qn_y = sum(weight[idxD[0:Nparticle_sub]]
+                            *sin(iorder*phi[idxD[0:Nparticle_sub]]))
+            Qn_data[iorder-1,11] = temp_Qn_x/(Nparticle_sub + eps)
+            Qn_data[iorder-1,12] = temp_Qn_y/(Nparticle_sub + eps)
+            
+            # pT differential Qn vectors
             for ipT in range(npT):
                 data_idx = (iorder-1)*npT + ipT
+                # pT differential Qn vectors at mid rapidity
                 if idx_pT[ipT] != []:
                     Nparticle_pT = len(idx_pT[ipT])
                     Qn_pTdata[data_idx,1] = mean(pT[idx_pT[ipT]])
-                    # pT differential Qn vectors at mid rapidity
                     temp_Qn_x = sum(
                         weight[idx_pT[ipT]]*cos(iorder*phi[idx_pT[ipT]]))
                     temp_Qn_y = sum(
@@ -558,19 +594,22 @@ class ParticleReader(object):
                     Qn_pTdata[data_idx,2] = Nparticle_pT
                     Qn_pTdata[data_idx,3] = temp_Qn_x/(Nparticle_pT + eps)
                     Qn_pTdata[data_idx,4] = temp_Qn_y/(Nparticle_pT + eps)
-                Nparticle_sub_pT = min(len(idxA_pT[ipT]), len(idxB_pT[ipT]))
+
+                # pT differential Qn vectors from sub events
+                Nparticle_sub_pT = min(len(idxA_pT[ipT]), len(idxB_pT[ipT]),
+                                       len(idxC_pT[ipT]), len(idxD_pT[ipT]))
+                Qn_pTdata[data_idx,5] = Nparticle_sub_pT
                 if Nparticle_sub_pT == 0: continue
-                # pT differential QnA vectors at forward rapidity
+                # pT differential QnA vectors at (-1.5, -0.5)
                 temp_Qn_x = sum(
                     weight[idxA_pT[ipT][0:Nparticle_sub_pT]]
                     *cos(iorder*phi[idxA_pT[ipT][0:Nparticle_sub_pT]]))
                 temp_Qn_y = sum(
                     weight[idxA_pT[ipT][0:Nparticle_sub_pT]]
                     *sin(iorder*phi[idxA_pT[ipT][0:Nparticle_sub_pT]]))
-                Qn_pTdata[data_idx,5] = Nparticle_sub_pT
                 Qn_pTdata[data_idx,6] = temp_Qn_x/(Nparticle_sub_pT + eps)
                 Qn_pTdata[data_idx,7] = temp_Qn_y/(Nparticle_sub_pT + eps)
-                # pT differential QnB vector at backward rapidity
+                # pT differential QnB vector at (0.5, 1.5)
                 temp_Qn_x = sum(
                     weight[idxB_pT[ipT][0:Nparticle_sub_pT]]
                     *cos(iorder*phi[idxB_pT[ipT][0:Nparticle_sub_pT]]))
@@ -579,6 +618,24 @@ class ParticleReader(object):
                     *sin(iorder*phi[idxB_pT[ipT][0:Nparticle_sub_pT]]))
                 Qn_pTdata[data_idx,8] = temp_Qn_x/(Nparticle_sub_pT + eps)
                 Qn_pTdata[data_idx,9] = temp_Qn_y/(Nparticle_sub_pT + eps)
+                # pT differential QnC vectors at (-2.5, -1.5)
+                temp_Qn_x = sum(
+                    weight[idxC_pT[ipT][0:Nparticle_sub_pT]]
+                    *cos(iorder*phi[idxC_pT[ipT][0:Nparticle_sub_pT]]))
+                temp_Qn_y = sum(
+                    weight[idxC_pT[ipT][0:Nparticle_sub_pT]]
+                    *sin(iorder*phi[idxC_pT[ipT][0:Nparticle_sub_pT]]))
+                Qn_pTdata[data_idx,10] = temp_Qn_x/(Nparticle_sub_pT + eps)
+                Qn_pTdata[data_idx,11] = temp_Qn_y/(Nparticle_sub_pT + eps)
+                # pT differential QnD vector at (1.5, 2.5)
+                temp_Qn_x = sum(
+                    weight[idxD_pT[ipT][0:Nparticle_sub_pT]]
+                    *cos(iorder*phi[idxD_pT[ipT][0:Nparticle_sub_pT]]))
+                temp_Qn_y = sum(
+                    weight[idxD_pT[ipT][0:Nparticle_sub_pT]]
+                    *sin(iorder*phi[idxD_pT[ipT][0:Nparticle_sub_pT]]))
+                Qn_pTdata[data_idx,12] = temp_Qn_x/(Nparticle_sub_pT + eps)
+                Qn_pTdata[data_idx,13] = temp_Qn_y/(Nparticle_sub_pT + eps)
 
         return(Qn_data, Qn_pTdata)
         
@@ -616,7 +673,9 @@ class ParticleReader(object):
              ('Nparticle', 'integer'), ('Qn_real', 'real'), 
              ('Qn_imag', 'real'), ('Nparticle_sub', 'integer'), 
              ('QnA_real', 'real'), ('QnA_imag', 'real'), 
-             ('QnB_real', 'real'), ('QnB_imag', 'real')
+             ('QnB_real', 'real'), ('QnB_imag', 'real'),
+             ('QnC_real', 'real'), ('QnC_imag', 'real'), 
+             ('QnD_real', 'real'), ('QnD_imag', 'real')
             )):
             collected_flag = False
         else:
@@ -647,7 +706,9 @@ class ParticleReader(object):
              ('Nparticle', 'integer'), ('Qn_real', 'real'), 
              ('Qn_imag', 'real'), ('Nparticle_sub', 'integer'), 
              ('QnA_real', 'real'), ('QnA_imag', 'real'), 
-             ('QnB_real', 'real'), ('QnB_imag', 'real')
+             ('QnB_real', 'real'), ('QnB_imag', 'real'),
+             ('QnC_real', 'real'), ('QnC_imag', 'real'), 
+             ('QnD_real', 'real'), ('QnD_imag', 'real')
             )):
             collected_pTdiff_flag = False
         else:
