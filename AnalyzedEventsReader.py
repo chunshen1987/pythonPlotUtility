@@ -1767,13 +1767,13 @@ class AnalyzedDataReader(object):
         
         return rn_avg
 
-    def get_ptinte_three_flow_correlation_ep(
-        self, particle_name, n1, n2, n3, c1 = 1, c2 = 1, c3 = 1,
+    def get_ptinte_three_flow_correlation(
+        self, particle_name, method, n1, n2, n3, c1 = 1, c2 = 1, c3 = 1,
         pT_1_range = (0.0, 5.0), pT_2_range = (0.0, 5.0), 
         pT_3_range = (0.0, 5.0)):
         """
             get pT integrated three flow vectors correlations according 
-            to event plane method
+            to event plane or scalar product method
             r_{n1, n2, n3} = 
                 <(Q_n1/|Q_n1|)^c1*(Q_n2/|Q_n2|)^c2*(Q_n3/|Q_n3|)^c3>_ev
                 /(sqrt(<(Q_nA1/|Q_nA1|*conj(Q_nB1/|Q_nB1|))^c1>_ev)
@@ -1788,9 +1788,14 @@ class AnalyzedDataReader(object):
         """
         if n1*c1 + n2*c2 + n3*c3 != 0:
             raise ValueError(
-                "AnalyzedDataReader.get_ptinte_two_flow_correlation_ep: "
+                "AnalyzedDataReader.get_ptinte_three_flow_correlation: "
                 "n1*c1 + n2*c2 + n3*c3 = %d != 0!" % (n1*c1 + n2*c2 + n3*c3))
-        print("collect pT integraged three event plane flow correlation ...")
+        if method not in  ['event_plane', 'scalar_product']:
+            raise ValueError(
+                "AnalyzedDataReader.get_ptinte_three_flow_correlation: "
+                "invalid method : %s" % method)
+        print("collect pT integrated flow three-plane correlation "
+              "according to %s method ..." % method)
         print("r_{%d*%d, %d*%d, %d*%d} for %s \n"
               "with pT_1 range = (%g, %g) GeV and "
               "pT_2 range = (%g, %g) GeV and pT_3_range = (%g, %g) GeV"
@@ -1816,10 +1821,12 @@ class AnalyzedDataReader(object):
         totalN = 0
         nev = 0
         
-        resolutionFactor_1 = 0.0
-        resolutionFactor_1_imag = 0.0
-        resolutionFactor_2 = 0.0
-        resolutionFactor_2_imag = 0.0
+        resolutionFactor_1_AB = 0.0
+        resolutionFactor_1_CD = 0.0
+        resolutionFactor_2_AB = 0.0
+        resolutionFactor_2_CD = 0.0
+        resolutionFactor_3_AB = 0.0
+        resolutionFactor_3_CD = 0.0
 
         npT_1 = len(self.db.executeSQLquery(
             "select pT from %s where hydro_event_id = %d and "
@@ -1854,7 +1861,8 @@ class AnalyzedDataReader(object):
             if hydro_ev_bound_low == hydro_ev_bound_high:
                 temp_1_data = array(self.db.executeSQLquery(
                     "select pT, Nparticle_sub, QnA_real, QnA_imag, "
-                    "QnB_real, QnB_imag from %s "
+                    "QnB_real, QnB_imag, QnC_real, QnC_imag, "
+                    "QnD_real, QnD_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "hydro_event_id = %d and "
                     "(%d <= urqmd_event_id and urqmd_event_id < %d) and "
@@ -1864,8 +1872,9 @@ class AnalyzedDataReader(object):
                        urqmd_ev_bound_high, pT_1_range[0], pT_1_range[1])
                 ).fetchall())
                 temp_2_data = array(self.db.executeSQLquery(
-                    "select pT, Nparticle_sub, QnB_real, QnB_imag, "
-                    "QnA_real, QnA_imag from %s "
+                    "select pT, Nparticle_sub, QnA_real, QnA_imag, "
+                    "QnB_real, QnB_imag, QnC_real, QnC_imag, "
+                    "QnD_real, QnD_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "hydro_event_id = %d and "
                     "(%d <= urqmd_event_id and urqmd_event_id < %d) and "
@@ -1875,7 +1884,8 @@ class AnalyzedDataReader(object):
                        urqmd_ev_bound_high, pT_2_range[0], pT_2_range[1])
                 ).fetchall())
                 temp_3_data = array(self.db.executeSQLquery(
-                    "select pT, Nparticle_sub, QnC_real, QnC_imag, "
+                    "select pT, Nparticle_sub, QnA_real, QnA_imag, "
+                    "QnB_real, QnB_imag,QnC_real, QnC_imag, "
                     "QnD_real, QnD_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "hydro_event_id = %d and "
@@ -1888,7 +1898,8 @@ class AnalyzedDataReader(object):
             else:
                 temp_1_data = array(self.db.executeSQLquery(
                     "select pT, Nparticle_sub, QnA_real, QnA_imag, "
-                    "QnB_real, QnB_imag from %s "
+                    "QnB_real, QnB_imag, QnC_real, QnC_imag, "
+                    "QnD_real, QnD_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "((hydro_event_id = %d and urqmd_event_id >= %d) "
                     " or (%d < hydro_event_id and hydro_event_id < %d) "
@@ -1901,8 +1912,9 @@ class AnalyzedDataReader(object):
                        pT_1_range[0], pT_1_range[1])
                 ).fetchall())
                 temp_2_data = array(self.db.executeSQLquery(
-                    "select pT, Nparticle_sub, QnB_real, QnB_imag, "
-                    "QnA_real, QnA_imag from %s "
+                    "select pT, Nparticle_sub, QnA_real, QnA_imag, "
+                    "QnB_real, QnB_imag, QnC_real, QnC_imag, "
+                    "QnD_real, QnD_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "((hydro_event_id = %d and urqmd_event_id >= %d) "
                     " or (%d < hydro_event_id and hydro_event_id < %d) "
@@ -1915,7 +1927,8 @@ class AnalyzedDataReader(object):
                        pT_2_range[0], pT_2_range[1])
                 ).fetchall())
                 temp_3_data = array(self.db.executeSQLquery(
-                    "select pT, Nparticle_sub, QnC_real, QnC_imag, "
+                    "select pT, Nparticle_sub, QnA_real, QnA_imag, "
+                    "QnB_real, QnB_imag, QnC_real, QnC_imag, "
                     "QnD_real, QnD_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "((hydro_event_id = %d and urqmd_event_id >= %d) "
@@ -1940,102 +1953,214 @@ class AnalyzedDataReader(object):
                 if nparticle_2 < 1: continue
                 if nparticle_3 < 1: continue
                 nev += 1
-                pTinte_Qn_1_x = sum(ev_1_data[:,1]*ev_1_data[:,2])/nparticle_1
-                pTinte_Qn_1_y = sum(ev_1_data[:,1]*ev_1_data[:,3])/nparticle_1
+
+                pTinte_Qn1_A_x = sum(ev_1_data[:,1]*ev_1_data[:,2])/nparticle_1
+                pTinte_Qn1_A_y = sum(ev_1_data[:,1]*ev_1_data[:,3])/nparticle_1
+                pTinte_Qn1_B_x = sum(ev_1_data[:,1]*ev_1_data[:,4])/nparticle_1
+                pTinte_Qn1_B_y = sum(ev_1_data[:,1]*ev_1_data[:,5])/nparticle_1
+                pTinte_Qn1_C_x = sum(ev_1_data[:,1]*ev_1_data[:,6])/nparticle_1
+                pTinte_Qn1_C_y = sum(ev_1_data[:,1]*ev_1_data[:,7])/nparticle_1
+                pTinte_Qn1_D_x = sum(ev_1_data[:,1]*ev_1_data[:,8])/nparticle_1
+                pTinte_Qn1_D_y = sum(ev_1_data[:,1]*ev_1_data[:,9])/nparticle_1
                 
-                pTinte_Qn_ref_1_x = (
-                    sum(ev_1_data[:,1]*ev_1_data[:,4])/nparticle_1)
-                pTinte_Qn_ref_1_y = (
-                    sum(ev_1_data[:,1]*ev_1_data[:,5])/nparticle_1)
-
-                pTinte_Qn_1 = sqrt(pTinte_Qn_1_x**2. + pTinte_Qn_1_y**2)
-                pTinte_Qn_1_psi  = arctan2(pTinte_Qn_1_y, pTinte_Qn_1_x)/n1
-                pTinte_Qn_ref_1 = sqrt(pTinte_Qn_ref_1_x**2. 
-                                       + pTinte_Qn_ref_1_y**2)
-                pTinte_Qn_ref_1_psi  = arctan2(pTinte_Qn_ref_1_y, 
-                                               pTinte_Qn_ref_1_x)/n1
-
-                pTinte_Qn_2_x = sum(ev_2_data[:,1]*ev_2_data[:,2])/nparticle_2
-                pTinte_Qn_2_y = sum(ev_2_data[:,1]*ev_2_data[:,3])/nparticle_2
-
-                pTinte_Qn_ref_2_x = (
-                    sum(ev_2_data[:,1]*ev_2_data[:,4])/nparticle_2)
-                pTinte_Qn_ref_2_y = (
-                    sum(ev_2_data[:,1]*ev_2_data[:,5])/nparticle_2)
-
-                pTinte_Qn_2 = sqrt(pTinte_Qn_2_x**2. + pTinte_Qn_2_y**2)
-                pTinte_Qn_2_psi = arctan2(pTinte_Qn_2_y, pTinte_Qn_2_x)/n2
+                pTinte_Qn1_A = sqrt(pTinte_Qn1_A_x**2. + pTinte_Qn1_A_y**2)
+                pTinte_Qn1_B = sqrt(pTinte_Qn1_B_x**2. + pTinte_Qn1_B_y**2)
+                pTinte_Qn1_C = sqrt(pTinte_Qn1_C_x**2. + pTinte_Qn1_C_y**2)
+                pTinte_Qn1_D = sqrt(pTinte_Qn1_D_x**2. + pTinte_Qn1_D_y**2)
+                pTinte_Qn1_A_psi  = arctan2(pTinte_Qn1_A_y, pTinte_Qn1_A_x)/n1
+                pTinte_Qn1_B_psi  = arctan2(pTinte_Qn1_B_y, pTinte_Qn1_B_x)/n1
+                pTinte_Qn1_C_psi  = arctan2(pTinte_Qn1_C_y, pTinte_Qn1_C_x)/n1
+                pTinte_Qn1_D_psi  = arctan2(pTinte_Qn1_D_y, pTinte_Qn1_D_x)/n1
                 
-                pTinte_Qn_ref_2 = sqrt(pTinte_Qn_ref_2_x**2. 
-                                       + pTinte_Qn_ref_2_y**2)
-                pTinte_Qn_ref_2_psi  = arctan2(pTinte_Qn_ref_2_y, 
-                                               pTinte_Qn_ref_2_x)/n2
+                pTinte_Qn2_A_x = sum(ev_2_data[:,1]*ev_2_data[:,2])/nparticle_2
+                pTinte_Qn2_A_y = sum(ev_2_data[:,1]*ev_2_data[:,3])/nparticle_2
+                pTinte_Qn2_B_x = sum(ev_2_data[:,1]*ev_2_data[:,4])/nparticle_2
+                pTinte_Qn2_B_y = sum(ev_2_data[:,1]*ev_2_data[:,5])/nparticle_2
+                pTinte_Qn2_C_x = sum(ev_2_data[:,1]*ev_2_data[:,6])/nparticle_2
+                pTinte_Qn2_C_y = sum(ev_2_data[:,1]*ev_2_data[:,7])/nparticle_2
+                pTinte_Qn2_D_x = sum(ev_2_data[:,1]*ev_2_data[:,8])/nparticle_2
+                pTinte_Qn2_D_y = sum(ev_2_data[:,1]*ev_2_data[:,9])/nparticle_2
                 
-                pTinte_Qn_3_x = sum(ev_3_data[:,1]*ev_3_data[:,2])/nparticle_3
-                pTinte_Qn_3_y = sum(ev_3_data[:,1]*ev_3_data[:,3])/nparticle_3
+                pTinte_Qn2_A = sqrt(pTinte_Qn2_A_x**2. + pTinte_Qn2_A_y**2)
+                pTinte_Qn2_B = sqrt(pTinte_Qn2_B_x**2. + pTinte_Qn2_B_y**2)
+                pTinte_Qn2_C = sqrt(pTinte_Qn2_C_x**2. + pTinte_Qn2_C_y**2)
+                pTinte_Qn2_D = sqrt(pTinte_Qn2_D_x**2. + pTinte_Qn2_D_y**2)
+                pTinte_Qn2_A_psi  = arctan2(pTinte_Qn2_A_y, pTinte_Qn2_A_x)/n2
+                pTinte_Qn2_B_psi  = arctan2(pTinte_Qn2_B_y, pTinte_Qn2_B_x)/n2
+                pTinte_Qn2_C_psi  = arctan2(pTinte_Qn2_C_y, pTinte_Qn2_C_x)/n2
+                pTinte_Qn2_D_psi  = arctan2(pTinte_Qn2_D_y, pTinte_Qn2_D_x)/n2
 
-                pTinte_Qn_ref_3_x = (
-                    sum(ev_3_data[:,1]*ev_3_data[:,4])/nparticle_3)
-                pTinte_Qn_ref_3_y = (
-                    sum(ev_3_data[:,1]*ev_3_data[:,5])/nparticle_3)
-
-                pTinte_Qn_3 = sqrt(pTinte_Qn_3_x**2. + pTinte_Qn_3_y**2)
-                pTinte_Qn_3_psi = arctan2(pTinte_Qn_3_y, pTinte_Qn_3_x)/n3
+                pTinte_Qn3_A_x = sum(ev_3_data[:,1]*ev_3_data[:,2])/nparticle_3
+                pTinte_Qn3_A_y = sum(ev_3_data[:,1]*ev_3_data[:,3])/nparticle_3
+                pTinte_Qn3_B_x = sum(ev_3_data[:,1]*ev_3_data[:,4])/nparticle_3
+                pTinte_Qn3_B_y = sum(ev_3_data[:,1]*ev_3_data[:,5])/nparticle_3
+                pTinte_Qn3_C_x = sum(ev_3_data[:,1]*ev_3_data[:,6])/nparticle_3
+                pTinte_Qn3_C_y = sum(ev_3_data[:,1]*ev_3_data[:,7])/nparticle_3
+                pTinte_Qn3_D_x = sum(ev_3_data[:,1]*ev_3_data[:,8])/nparticle_3
+                pTinte_Qn3_D_y = sum(ev_3_data[:,1]*ev_3_data[:,9])/nparticle_3
                 
-                pTinte_Qn_ref_3 = sqrt(pTinte_Qn_ref_3_x**2. 
-                                       + pTinte_Qn_ref_3_y**2)
-                pTinte_Qn_ref_3_psi  = arctan2(pTinte_Qn_ref_3_y, 
-                                               pTinte_Qn_ref_3_x)/n3
+                pTinte_Qn3_A = sqrt(pTinte_Qn3_A_x**2. + pTinte_Qn3_A_y**2)
+                pTinte_Qn3_B = sqrt(pTinte_Qn3_B_x**2. + pTinte_Qn3_B_y**2)
+                pTinte_Qn3_C = sqrt(pTinte_Qn3_C_x**2. + pTinte_Qn3_C_y**2)
+                pTinte_Qn3_D = sqrt(pTinte_Qn3_D_x**2. + pTinte_Qn3_D_y**2)
+                pTinte_Qn3_A_psi  = arctan2(pTinte_Qn3_A_y, pTinte_Qn3_A_x)/n3
+                pTinte_Qn3_B_psi  = arctan2(pTinte_Qn3_B_y, pTinte_Qn3_B_x)/n3
+                pTinte_Qn3_C_psi  = arctan2(pTinte_Qn3_C_y, pTinte_Qn3_C_x)/n3
+                pTinte_Qn3_D_psi  = arctan2(pTinte_Qn3_D_y, pTinte_Qn3_D_x)/n3
                 
-                temp_real = (cos(conjFlags[0]*n1*c1*pTinte_Qn_1_psi 
-                                 + conjFlags[1]*n2*c2*pTinte_Qn_2_psi
-                                 + conjFlags[2]*n3*c2*pTinte_Qn_3_psi)
-                            + cos(conjFlags[0]*n1*c1*pTinte_Qn_ref_1_psi 
-                                  + conjFlags[1]*n2*c2*pTinte_Qn_ref_2_psi
-                                  + conjFlags[2]*n3*c2*pTinte_Qn_3_psi))
-                temp_imag = (sin(conjFlags[0]*n1*c1*pTinte_Qn_1_psi 
-                                 + conjFlags[1]*n2*c2*pTinte_Qn_2_psi
-                                 + conjFlags[2]*n3*c3*pTinte_Qn_3_psi)
-                             + sin(conjFlags[0]*n1*c1*pTinte_Qn_ref_1_psi 
-                                 + conjFlags[1]*n2*c2*pTinte_Qn_ref_2_psi
-                                 + conjFlags[2]*n3*c3*pTinte_Qn_3_psi))
+                if method == 'event_plane' :
+                    temp_real = (cos(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
+                                     + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
+                                     + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                                + cos(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
+                                      + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
+                                      + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                                + cos(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
+                                      + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
+                                      + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                                + cos(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
+                                      + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
+                                      + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                                + cos(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
+                                      + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
+                                      + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                                + cos(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
+                                      + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
+                                      + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                    )
+                    temp_imag = (sin(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
+                                     + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
+                                     + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                                + sin(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
+                                      + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
+                                      + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                                + sin(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
+                                      + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
+                                      + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                                + sin(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
+                                      + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
+                                      + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                                + sin(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
+                                      + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
+                                      + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                                + sin(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
+                                      + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
+                                      + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                    )
+                    resolutionFactor_1_AB += cos(n1*c1*(pTinte_Qn1_A_psi 
+                                                        - pTinte_Qn1_B_psi))
+                    resolutionFactor_1_CD += cos(n1*c1*(pTinte_Qn1_C_psi 
+                                                        - pTinte_Qn1_D_psi))
+                    resolutionFactor_2_AB += cos(n2*c2*(pTinte_Qn2_A_psi 
+                                                        - pTinte_Qn2_B_psi))
+                    resolutionFactor_2_CD += cos(n2*c2*(pTinte_Qn2_C_psi 
+                                                        - pTinte_Qn2_D_psi))
+                    resolutionFactor_3_AB += cos(n3*c3*(pTinte_Qn3_A_psi 
+                                                        - pTinte_Qn3_B_psi))
+                    resolutionFactor_3_CD += cos(n3*c3*(pTinte_Qn3_C_psi 
+                                                    - pTinte_Qn3_D_psi))
+                else:
+                    temp_real = (
+                        pTinte_Qn1_A**c1*pTinte_Qn2_B**c2*pTinte_Qn3_C**c3
+                        *cos(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
+                             + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
+                             + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                        + pTinte_Qn1_B**c1*pTinte_Qn2_A**c2*pTinte_Qn3_C**c3
+                          *cos(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
+                               + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
+                               + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                        + pTinte_Qn1_C**c1*pTinte_Qn2_A**c2*pTinte_Qn3_B**c3
+                          *cos(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
+                               + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
+                               + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                        + pTinte_Qn1_C**c1*pTinte_Qn2_B**c2*pTinte_Qn3_A**c3
+                          *cos(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
+                               + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
+                               + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                        + pTinte_Qn1_A**c1*pTinte_Qn2_C**c2*pTinte_Qn3_B**c3
+                          *cos(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
+                               + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
+                               + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                        + pTinte_Qn1_B**c1*pTinte_Qn2_C**c2*pTinte_Qn3_A**c3
+                          *cos(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
+                               + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
+                               + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                    )
+                    temp_imag = (
+                        pTinte_Qn1_A**c1*pTinte_Qn2_B**c2*pTinte_Qn3_C**c3
+                        *sin(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
+                             + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
+                             + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                        + pTinte_Qn1_B**c1*pTinte_Qn2_A**c2*pTinte_Qn3_C**c3
+                          *sin(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
+                               + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
+                               + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                        + pTinte_Qn1_C**c1*pTinte_Qn2_A**c2*pTinte_Qn3_B**c3
+                          *sin(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
+                               + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
+                               + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                        + pTinte_Qn1_C**c1*pTinte_Qn2_B**c2*pTinte_Qn3_A**c3
+                          *sin(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
+                               + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
+                               + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                        + pTinte_Qn1_A**c1*pTinte_Qn2_C**c2*pTinte_Qn3_B**c3
+                          *sin(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
+                               + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
+                               + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                        + pTinte_Qn1_B**c1*pTinte_Qn2_C**c2*pTinte_Qn3_A**c3
+                          *sin(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
+                               + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
+                               + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                    )
+                    resolutionFactor_1_AB += (
+                        pTinte_Qn1_A**c1*pTinte_Qn1_B**c1
+                        *cos(n1*c1*(pTinte_Qn1_A_psi - pTinte_Qn1_B_psi)))
+                    resolutionFactor_1_CD += (
+                        pTinte_Qn1_C**c1*pTinte_Qn1_D**c1
+                        *cos(n1*c1*(pTinte_Qn1_C_psi - pTinte_Qn1_D_psi)))
+                    resolutionFactor_2_AB += (
+                        pTinte_Qn2_A**c2*pTinte_Qn2_B**c2
+                        *cos(n2*c2*(pTinte_Qn2_A_psi - pTinte_Qn2_B_psi)))
+                    resolutionFactor_2_CD += (
+                        pTinte_Qn2_C**c2*pTinte_Qn2_D**c2
+                        *cos(n2*c2*(pTinte_Qn2_C_psi - pTinte_Qn2_D_psi)))
+                    resolutionFactor_3_AB += (
+                        pTinte_Qn3_A**c3*pTinte_Qn3_B**c3
+                        *cos(n3*c3*(pTinte_Qn3_A_psi - pTinte_Qn3_B_psi)))
+                    resolutionFactor_3_CD += (
+                        pTinte_Qn3_C**c3*pTinte_Qn3_D**c3
+                        *cos(n3*c3*(pTinte_Qn3_C_psi - pTinte_Qn3_D_psi)))
 
                 rn_real += temp_real
                 rn_real_err += temp_real**2.
                 rn_imag += temp_imag
                 rn_imag_err += temp_imag**2.
                 
-                resolutionFactor_1 += cos(n1*c1*(pTinte_Qn_ref_1_psi 
-                                                 - pTinte_Qn_1_psi))
-                resolutionFactor_2 += cos(n2*c2*(pTinte_Qn_2_psi 
-                                                 - pTinte_Qn_ref_2_psi))
-                resolutionFactor_3 += cos(n3*c3*(pTinte_Qn_3_psi 
-                                                 - pTinte_Qn_ref_3_psi))
-                resolutionFactor_1_imag += sin(n1*c1*(pTinte_Qn_ref_1_psi 
-                                                      - pTinte_Qn_1_psi))
-                resolutionFactor_2_imag += sin(n2*c2*(pTinte_Qn_2_psi 
-                                                      - pTinte_Qn_ref_2_psi))
-                resolutionFactor_3_imag += sin(n3*c3*(pTinte_Qn_3_psi 
-                                                      - pTinte_Qn_ref_3_psi))
-        resolutionFactor_1 = sqrt(resolutionFactor_1/nev)
-        resolutionFactor_2 = sqrt(resolutionFactor_2/nev)
-        resolutionFactor_3 = sqrt(resolutionFactor_3/nev)
-        resolutionFactor_1_imag = resolutionFactor_1_imag/nev
-        resolutionFactor_2_imag = resolutionFactor_2_imag/nev
-        resolutionFactor_3_imag = resolutionFactor_3_imag/nev
+        resolutionFactor_1_AB = sqrt(resolutionFactor_1_AB/nev)
+        resolutionFactor_1_CD = sqrt(resolutionFactor_1_CD/nev)
+        resolutionFactor_2_AB = sqrt(resolutionFactor_2_AB/nev)
+        resolutionFactor_2_CD = sqrt(resolutionFactor_2_CD/nev)
+        resolutionFactor_3_AB = sqrt(resolutionFactor_3_AB/nev)
+        resolutionFactor_3_CD = sqrt(resolutionFactor_3_CD/nev)
+        
+        total_resolutionFactor = (
+            2.*resolutionFactor_1_AB*resolutionFactor_2_AB
+              *resolutionFactor_3_CD
+            + 2.*resolutionFactor_1_CD*resolutionFactor_2_AB
+                *resolutionFactor_3_AB
+            + 2.*resolutionFactor_1_AB*resolutionFactor_2_CD
+                *resolutionFactor_3_AB
+        )
+
         rn_real = rn_real/nev
         rn_imag = rn_imag/nev
         rn_real_err = sqrt(rn_real_err/nev - rn_real**2)/sqrt(nev-1)
         rn_imag_err = sqrt(rn_imag_err/nev - rn_imag**2)/sqrt(nev-1)
 
-        rn_avg[0] = (rn_real/(2.*resolutionFactor_1
-                              *resolutionFactor_2*resolutionFactor_3))
-        rn_avg[1] = (rn_real_err/(2.*resolutionFactor_1
-                                  *resolutionFactor_2*resolutionFactor_3))
-        rn_avg[2] = (rn_imag/(2.*resolutionFactor_1
-                              *resolutionFactor_2*resolutionFactor_3))
-        rn_avg[3] = (rn_imag_err/(2.*resolutionFactor_1
-                                  *resolutionFactor_2*resolutionFactor_3))
+        rn_avg[0] = rn_real/total_resolutionFactor
+        rn_avg[1] = rn_real_err/total_resolutionFactor
+        rn_avg[2] = rn_imag/total_resolutionFactor
+        rn_avg[3] = rn_imag_err/total_resolutionFactor
         
         return rn_avg
 
@@ -2048,17 +2173,21 @@ if __name__ == "__main__":
     if len(argv) < 2:
         printHelpMessageandQuit()
     test = AnalyzedDataReader(str(argv[1]))
-    print(test.get_ptinte_two_flow_correlation_ep('pion_p', 2, -2))
-    print(test.get_ptinte_two_flow_correlation_sp('pion_p', 2, -2))
-    print(test.get_avg_diffvn_flow('pion_p', 2, 
-        pT_range = linspace(0.0, 2.0, 21)))
-    print(test.get_avg_intevn_flow('pion_p', 2, pT_range = (0.3, 3.0)))
-    print(test.get_event_plane_diffvn_flow('pion_p', 2, 
-        pT_range = linspace(0.0, 2.0, 21)))
-    print(test.get_event_plane_intevn_flow('pion_p', 2, pT_range = (0.3, 3.0)))
-    print(test.get_scalar_product_diffvn_flow('pion_p', 2, 
-        pT_range = linspace(0.0, 2.0, 21)))
-    print(test.get_scalar_product_intevn_flow('pion_p', 2, pT_range = (0.3, 3.0)))
+    print(test.get_ptinte_three_flow_correlation('pion_p', 'event_plane', 
+                                                 2, 3, -5))
+    print(test.get_ptinte_three_flow_correlation('pion_p', 'scalar_product',
+                                                 2, 3, -5))
+    #print(test.get_ptinte_two_flow_correlation_ep('pion_p', 2, -2))
+    #print(test.get_ptinte_two_flow_correlation_sp('pion_p', 2, -2))
+    #print(test.get_avg_diffvn_flow('pion_p', 2, 
+    #    pT_range = linspace(0.0, 2.0, 21)))
+    #print(test.get_avg_intevn_flow('pion_p', 2, pT_range = (0.3, 3.0)))
+    #print(test.get_event_plane_diffvn_flow('pion_p', 2, 
+    #    pT_range = linspace(0.0, 2.0, 21)))
+    #print(test.get_event_plane_intevn_flow('pion_p', 2, pT_range = (0.3, 3.0)))
+    #print(test.get_scalar_product_diffvn_flow('pion_p', 2, 
+    #    pT_range = linspace(0.0, 2.0, 21)))
+    #print(test.get_scalar_product_intevn_flow('pion_p', 2, pT_range = (0.3, 3.0)))
     #print(test.get_diffvn_2pc_flow('pion_p', 2, 
     #    pT_range = linspace(0.0, 2.0, 21)))
     #print(test.get_intevn_2pc_flow('pion_p', 2, pT_range = (0.3, 3.0)))
