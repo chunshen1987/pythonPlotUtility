@@ -141,7 +141,7 @@ class MinbiasEccReader(object):
         eccn_stat_ed_output.close()
 
     def get_distribution(self, dis_type='total_entropy', nbin=30,
-                         cut_type='total_entropy', centrality_bound=[0, 100]):
+                         cut_type='total_entropy', centrality_bound=(0, 100)):
         """
             this function bin and output distribution of a given quantity
             in a given centrality bin output format:
