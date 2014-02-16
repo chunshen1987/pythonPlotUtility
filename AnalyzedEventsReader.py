@@ -1495,7 +1495,7 @@ class AnalyzedDataReader(object):
                 ).fetchall())
                 temp_3_data = array(self.db.executeSQLquery(
                     "select pT, Nparticle_sub, QnA_real, QnA_imag, "
-                    "QnB_real, QnB_imag,QnC_real, QnC_imag, "
+                    "QnB_real, QnB_imag, QnC_real, QnC_imag, "
                     "QnD_real, QnD_imag from %s "
                     "where pid = %d and weight_type = '1' and n = %d and "
                     "hydro_event_id = %d and "
@@ -1545,11 +1545,11 @@ class AnalyzedDataReader(object):
                     " or (%d < hydro_event_id and hydro_event_id < %d) "
                     " or (hydro_event_id = %d and urqmd_event_id < %d)) and "
                     "(%g <= pT and pT <= %g)"
-                    % (analyzed_table_name_diff, pid, n2,
+                    % (analyzed_table_name_diff, pid, n3,
                        hydro_ev_bound_low, urqmd_ev_bound_low, 
                        hydro_ev_bound_low, hydro_ev_bound_high, 
                        hydro_ev_bound_high, urqmd_ev_bound_high,
-                       pT_2_range[0], pT_2_range[1])
+                       pT_3_range[0], pT_3_range[1])
                 ).fetchall())
             temp_nev = int(len(temp_1_data[:,0])/npT_1)
             for iev in range(temp_nev):
