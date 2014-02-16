@@ -909,7 +909,7 @@ class AnalyzedDataReader(object):
                 if nparticle == 0: continue
                 nev += 1
                 pTinte_Qn_x = sum(ev_data[:,1]*ev_data[:,2])/nparticle
-                pTinte_Qn_y = sum(ev_data[:,1]*ev_data[:,2])/nparticle
+                pTinte_Qn_y = sum(ev_data[:,1]*ev_data[:,3])/nparticle
                 if method == 'event_plane':
                     temp_real = ((pTinte_Qn_x*ref_Qn_AC_real[iev]
                                   + pTinte_Qn_y*ref_Qn_AC_imag[iev])
@@ -1171,10 +1171,10 @@ class AnalyzedDataReader(object):
 
             Note: if n1 = n2, r_{n1, n2} reduces to flow factorization ratio
         """
-        if n1*c1 + n2*c2 != 0:
-            raise ValueError(
-                "AnalyzedDataReader.get_ptinte_two_flow_correlation_ep: "
-                "n1*c1 + n2*c2 = %d != 0!" % (n1*c1 + n2*c2))
+        #if n1*c1 + n2*c2 != 0:
+        #    raise ValueError(
+        #        "AnalyzedDataReader.get_ptinte_two_flow_correlation_ep: "
+        #        "n1*c1 + n2*c2 = %d != 0!" % (n1*c1 + n2*c2))
         if method not in  ['event_plane', 'scalar_product']:
             raise ValueError(
                 "AnalyzedDataReader.get_ptinte_two_flow_correlation: "
@@ -1621,41 +1621,41 @@ class AnalyzedDataReader(object):
                 if method == 'event_plane' :
                     temp_real = (cos(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
                                      + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
-                                     + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                                     + conjFlags[2]*n3*c3*pTinte_Qn3_C_psi)
                                 + cos(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
                                       + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
-                                      + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                                      + conjFlags[2]*n3*c3*pTinte_Qn3_C_psi)
                                 + cos(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
                                       + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
-                                      + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                                      + conjFlags[2]*n3*c3*pTinte_Qn3_B_psi)
                                 + cos(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
                                       + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
-                                      + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                                      + conjFlags[2]*n3*c3*pTinte_Qn3_A_psi)
                                 + cos(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
                                       + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
-                                      + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                                      + conjFlags[2]*n3*c3*pTinte_Qn3_B_psi)
                                 + cos(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
                                       + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
-                                      + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                                      + conjFlags[2]*n3*c3*pTinte_Qn3_A_psi)
                     )
                     temp_imag = (sin(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
                                      + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
-                                     + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                                     + conjFlags[2]*n3*c3*pTinte_Qn3_C_psi)
                                 + sin(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
                                       + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
-                                      + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                                      + conjFlags[2]*n3*c3*pTinte_Qn3_C_psi)
                                 + sin(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
                                       + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
-                                      + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                                      + conjFlags[2]*n3*c3*pTinte_Qn3_B_psi)
                                 + sin(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
                                       + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
-                                      + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                                      + conjFlags[2]*n3*c3*pTinte_Qn3_A_psi)
                                 + sin(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
                                       + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
-                                      + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                                      + conjFlags[2]*n3*c3*pTinte_Qn3_B_psi)
                                 + sin(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
                                       + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
-                                      + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                                      + conjFlags[2]*n3*c3*pTinte_Qn3_A_psi)
                     )
                     resolutionFactor_1_AB += cos(n1*c1*(pTinte_Qn1_A_psi 
                                                         - pTinte_Qn1_B_psi))
@@ -1674,53 +1674,53 @@ class AnalyzedDataReader(object):
                         pTinte_Qn1_A**c1*pTinte_Qn2_B**c2*pTinte_Qn3_C**c3
                         *cos(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
                              + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
-                             + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                             + conjFlags[2]*n3*c3*pTinte_Qn3_C_psi)
                         + pTinte_Qn1_B**c1*pTinte_Qn2_A**c2*pTinte_Qn3_C**c3
                           *cos(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
                                + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
-                               + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                               + conjFlags[2]*n3*c3*pTinte_Qn3_C_psi)
                         + pTinte_Qn1_C**c1*pTinte_Qn2_A**c2*pTinte_Qn3_B**c3
                           *cos(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
                                + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
-                               + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                               + conjFlags[2]*n3*c3*pTinte_Qn3_B_psi)
                         + pTinte_Qn1_C**c1*pTinte_Qn2_B**c2*pTinte_Qn3_A**c3
                           *cos(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
                                + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
-                               + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                               + conjFlags[2]*n3*c3*pTinte_Qn3_A_psi)
                         + pTinte_Qn1_A**c1*pTinte_Qn2_C**c2*pTinte_Qn3_B**c3
                           *cos(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
                                + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
-                               + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                               + conjFlags[2]*n3*c3*pTinte_Qn3_B_psi)
                         + pTinte_Qn1_B**c1*pTinte_Qn2_C**c2*pTinte_Qn3_A**c3
                           *cos(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
                                + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
-                               + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                               + conjFlags[2]*n3*c3*pTinte_Qn3_A_psi)
                     )
                     temp_imag = (
                         pTinte_Qn1_A**c1*pTinte_Qn2_B**c2*pTinte_Qn3_C**c3
                         *sin(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
                              + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
-                             + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                             + conjFlags[2]*n3*c3*pTinte_Qn3_C_psi)
                         + pTinte_Qn1_B**c1*pTinte_Qn2_A**c2*pTinte_Qn3_C**c3
                           *sin(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
                                + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
-                               + conjFlags[2]*n3*c2*pTinte_Qn3_C_psi)
+                               + conjFlags[2]*n3*c3*pTinte_Qn3_C_psi)
                         + pTinte_Qn1_C**c1*pTinte_Qn2_A**c2*pTinte_Qn3_B**c3
                           *sin(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
                                + conjFlags[1]*n2*c2*pTinte_Qn2_A_psi
-                               + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                               + conjFlags[2]*n3*c3*pTinte_Qn3_B_psi)
                         + pTinte_Qn1_C**c1*pTinte_Qn2_B**c2*pTinte_Qn3_A**c3
                           *sin(conjFlags[0]*n1*c1*pTinte_Qn1_C_psi 
                                + conjFlags[1]*n2*c2*pTinte_Qn2_B_psi
-                               + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                               + conjFlags[2]*n3*c3*pTinte_Qn3_A_psi)
                         + pTinte_Qn1_A**c1*pTinte_Qn2_C**c2*pTinte_Qn3_B**c3
                           *sin(conjFlags[0]*n1*c1*pTinte_Qn1_A_psi 
                                + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
-                               + conjFlags[2]*n3*c2*pTinte_Qn3_B_psi)
+                               + conjFlags[2]*n3*c3*pTinte_Qn3_B_psi)
                         + pTinte_Qn1_B**c1*pTinte_Qn2_C**c2*pTinte_Qn3_A**c3
                           *sin(conjFlags[0]*n1*c1*pTinte_Qn1_B_psi 
                                + conjFlags[1]*n2*c2*pTinte_Qn2_C_psi
-                               + conjFlags[2]*n3*c2*pTinte_Qn3_A_psi)
+                               + conjFlags[2]*n3*c3*pTinte_Qn3_A_psi)
                     )
                     resolutionFactor_1_AB += (
                         pTinte_Qn1_A**c1*pTinte_Qn1_B**c1
