@@ -758,6 +758,46 @@ class ParticleReader(object):
     # functions to collect two particle correlation
     ########################################################################### 
 
+    def generateAnalyzedDatabase(self):
+        self.collect_particle_spectra("charged", rap_type = 'pseudorapidity')
+        self.collect_particle_yield_vs_rap("charged", rap_type = 'pseudorapidity')
+        self.collect_basic_particle_spectra()
+        self.collect_basic_particle_yield()
+        self.collect_flow_Qn_vectors('charged')
+        for aPart in ['pion_p', 'kaon_p', 'proton']:
+            self.collect_flow_Qn_vectors(aPart)
+    
+    def mergeAnalyzedDatabases(self, toDB, fromDB):
+        """
+            Merge the analyzed particle database "fromDB" to "toDB"; 
+            both are assumed to be databases created from ebe hybrid 
+            calculations, which contains exact tables as in 
+            analyzed_particles.db.
+        """
+        for aTable in fromDB.getAllTableNames():
+            # first copy table structure
+            firstCreation = toDB.createTableIfNotExists(
+                aTable, fromDB.getTableInfo(aTable))
+            if firstCreation:
+                if aTable == 'number_of_events': continue
+                # just copy
+                toDB.insertIntoTable(aTable, fromDB.selectFromTable(aTable))
+            else: # treatment depends on table type
+                # if it's a pid info table, nothing to be done
+                if "pid" in aTable: continue 
+                if aTable == 'number_of_events': continue
+                # not a pid info table: shift up hydroEvent_id by the 
+                # current existing max
+                currentEventIdMax = toDB.selectFromTable(
+                    aTable, "max(hydroEvent_id)")[0][0]
+                def shiftEID(row):
+                    newRow = list(row)
+                    newRow[0] += currentEventIdMax
+                    return newRow
+                toDB.insertIntoTable(aTable, 
+                               list(map(shiftEID, fromDB.selectFromTable(aTable))))
+        toDB.closeConnection() # commit
+
 def printHelpMessageandQuit():
     print "Usage : "
     print "ParticleReader.py databaseName"
@@ -767,13 +807,8 @@ if __name__ == "__main__":
     if len(argv) < 2:
         printHelpMessageandQuit()
     test = ParticleReader(str(argv[1]))
-    test.collect_particle_spectra("charged", rap_type = 'pseudorapidity')
-    test.collect_particle_yield_vs_rap("charged", rap_type = 'pseudorapidity')
-    test.collect_basic_particle_spectra()
-    test.collect_basic_particle_yield()
-    test.collect_flow_Qn_vectors('charged')
-    for aPart in ['pion_p', 'kaon_p', 'proton']:
-        test.collect_flow_Qn_vectors(aPart)
+    test.generateAnalyzedDatabase()
+    #for aPart in ['pion_p', 'kaon_p', 'proton']:
         #test.collect_particle_yield_vs_spatial_variable(aPart, 'tau', 
         #    linspace(0.0, 15.0, 76), 'rapidity', (-0.5, 0.5))
         #test.collect_particle_yield_vs_spatial_variable(aPart, 'x', 
