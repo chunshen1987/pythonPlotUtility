@@ -47,8 +47,9 @@ for aTable in fromDB.getAllTableNames():
         toDB.insertIntoTable(aTable, fromDB.selectFromTable(aTable))
     elif "multiplicities" in aTable:
         toDB.insertIntoTable(aTable, fromDB.executeSQLquery(
-            "select * from multiplicities where pid = 1001 "
-            "order by -N limit %d offset %d"
+            "select * from multiplicities where event_id in "
+            "(select event_id from multiplicities where pid = 1001 "
+            "order by -N limit %d offset %d)"
             % (nsample, noffset,)).fetchall())
     else:
         toDB.insertIntoTable(aTable, fromDB.executeSQLquery(

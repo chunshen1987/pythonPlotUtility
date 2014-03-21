@@ -139,6 +139,45 @@ class MinbiasEccReader(object):
         centrality_output.close()
         eccn_stat_sd_output.close()
         eccn_stat_ed_output.close()
+    
+    def centrality_cut_with_avg_collisional_parameters(self, cut_type):
+        """
+            this function cut the centralities and output event averaged
+            collisional parameters
+        """
+        print ('cutting centralities from database %s according to %s ....'
+               % (purple + self.db_name + normal, green + cut_type + normal))
+        centrality_output = open('centralityCut_%s.dat' % cut_type, 'w')
+        nevent = self.nev
+
+        for icen in range(len(self.centrality_boundaries)):
+            lowerbound = self.centrality_boundaries[icen][0]
+            upperbound = self.centrality_boundaries[icen][1]
+            nsample = int(nevent * (upperbound - lowerbound) / 100) - 1
+            noffset = int(nevent * lowerbound / 100)
+            if cut_type == 'b':
+                fetched_data = array(self.db.executeSQLquery(
+                    "select Npart, b, total_entropy, Ncoll from "
+                    "collisionParameters order by %s limit %d offset %d"
+                    % (cut_type, nsample, noffset)
+                ).fetchall())
+            else:
+                fetched_data = array(self.db.executeSQLquery(
+                    "select Npart, b, total_entropy, Ncoll from "
+                    "collisionParameters order by -%s limit %d offset %d"
+                    % (cut_type, nsample, noffset)
+                ).fetchall())
+            cen_central = (upperbound + lowerbound) / 2.
+            npart_mean = mean(fetched_data[:, 0])
+            b_mean = mean(fetched_data[:,1])
+            dsdy_mean = mean(fetched_data[:,2])
+            ncoll_mean = mean(fetched_data[:,0])
+            centrality_output.write(
+                "%6.4f  %18.8e  %18.8e  %18.8e  %18.8e \n"
+                % (cen_central, npart_mean, b_mean, dsdy_mean, ncoll_mean)
+            )
+        centrality_output.close()
+
 
     def get_distribution(self, dis_type='total_entropy', nbin=30,
                          cut_type='total_entropy', centrality_bound=(0, 100)):
@@ -219,7 +258,6 @@ class MinbiasEccReader(object):
         return array([binned_data[:, 0], binned_data[:, 1],
                       binned_data_err[:, 1], binned_data[:, 2],
                       binned_data_err[:, 2]]).transpose()
-
 
 if __name__ == "__main__":
     reader = MinbiasEccReader(str(argv[1]))
