@@ -147,7 +147,8 @@ class MinbiasEccReader(object):
         """
         print ('cutting centralities from database %s according to %s ....'
                % (purple + self.db_name + normal, green + cut_type + normal))
-        centrality_output = open('centralityCut_%s.dat' % cut_type, 'w')
+        centrality_output = open(
+            'avgcollisionParameters_centralityCut_%s.dat' % cut_type, 'w')
         nevent = self.nev
 
         for icen in range(len(self.centrality_boundaries)):
