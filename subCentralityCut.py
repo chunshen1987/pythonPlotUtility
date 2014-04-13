@@ -16,7 +16,6 @@ except:
     print("Usage: subCentrlityCut.py totalDatabaseName subcutDataabaseName "
           "Centrality_of_totalDatabase Centrality_of_subcutDatabase")
     sys.exit()
-
 fromDB = SqliteDB(path.abspath(fromDBName))
 
 if path.exists(path.abspath(toDBName)):
@@ -25,7 +24,7 @@ if path.exists(path.abspath(toDBName)):
 toDB = SqliteDB(path.abspath(toDBName))
 
 nevent = fromDB.executeSQLquery(
-    "select count(*) from multiplicities where pid = 1001").fetchall()
+    "select count(*) from multiplicities where pid = 1001").fetchall()[0][0]
 nsample = int(nevent * (float(subcutCent[1]) - float(subcutCent[0]))
               / (float(totalCent[1]) - float(totalCent[0])))
 noffset = int(nevent * (float(subcutCent[0]) - float(totalCent[0]))

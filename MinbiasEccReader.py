@@ -149,7 +149,9 @@ class MinbiasEccReader(object):
                % (purple + self.db_name + normal, green + cut_type + normal))
         centrality_output = open(
             'avgcollisionParameters_centralityCut_%s.dat' % cut_type, 'w')
-        centrality_output.write("#centrality <Npart> <b> <dS/dy> <Ncoll> \n")
+        centrality_output.write(
+            "#centrality <Npart> Npart_err <b> b_err <dS/dy> dS/dy_err "
+            "<Ncoll> Ncoll_err \n")
         nevent = self.nev
 
         for icen in range(len(self.centrality_boundaries)):
@@ -170,13 +172,20 @@ class MinbiasEccReader(object):
                     % (cut_type, nsample, noffset)
                 ).fetchall())
             cen_central = (upperbound + lowerbound) / 2.
+            nev = len(fetched_data[:,0])
             npart_mean = mean(fetched_data[:, 0])
             b_mean = mean(fetched_data[:,1])
             dsdy_mean = mean(fetched_data[:,2])
             ncoll_mean = mean(fetched_data[:,3])
+            npart_err = std(fetched_data[:, 0])/sqrt(nev)
+            b_err = std(fetched_data[:,1])/sqrt(nev)
+            dsdy_err = std(fetched_data[:,2])/sqrt(nev)
+            ncoll_err = std(fetched_data[:,3])/sqrt(nev)
             centrality_output.write(
-                "%6.4f  %18.8e  %18.8e  %18.8e  %18.8e \n"
-                % (cen_central, npart_mean, b_mean, dsdy_mean, ncoll_mean)
+                "%6.4f  %18.8e  %18.8e  %18.8e  %18.8e  %18.8e  %18.8e  "
+                "%18.8e  %18.8e \n"
+                % (cen_central, npart_mean, npart_err, b_mean, b_err, 
+                   dsdy_mean, dsdy_err, ncoll_mean, ncoll_err)
             )
         centrality_output.close()
 
