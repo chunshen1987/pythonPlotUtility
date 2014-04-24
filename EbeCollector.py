@@ -821,6 +821,7 @@ class EbeCollector(object):
             elif read_mode == "header_second_part":
                 try:
                     data_row_count = int(aLine.split()[1])
+                    phi_rotation = random.uniform(0, 2*pi)
                 except ValueError as e:
                     print("The file "+ UrQMDoutputFilePath +" does not have a valid urqmd output file header!")
                     exit(e)
@@ -842,11 +843,15 @@ class EbeCollector(object):
                             if rap < rap_range[1] and rap > rap_range[0]:
                                 pT = math.sqrt(px*px + py*py)
                                 pMag = math.sqrt(pT*pT + pz*pz)
-                                phi = math.atan2(py, px)
+                                x_rotated = x*cos(phi_rotation) - y*sin(phi_rotation)
+                                y_rotated = y*cos(phi_rotation) + x*sin(phi_rotation)
+                                px_rotated = px*cos(phi_rotation) - py*sin(phi_rotation)
+                                py_rotated = py*cos(phi_rotation) + px*sin(phi_rotation)
+                                phi = math.atan2(py_rotated, px_rotated)
                                 pseudorap = 0.5*math.log((pMag + pz)/(pMag - pz))
                                 tau = math.sqrt(t*t - z*z)
                                 eta = 0.5*math.log((t+z)/(t-z))
-                                db.insertIntoTable("particle_list", (hydroEvent_id, UrQMDEvent_id, databasePid, float(tau), float(x), float(y), float(eta), float(pT), float(phi), float(rap), float(pseudorap)))
+                                db.insertIntoTable("particle_list", (hydroEvent_id, UrQMDEvent_id, databasePid, float(tau), float(x_rotated), float(y_rotated), float(eta), float(pT), float(phi), float(rap), float(pseudorap)))
                     except ValueError as e:
                         print("The file "+ UrQMDoutputFilePath +" does not have valid urqmd data!")
                         exit(e)
@@ -905,6 +910,7 @@ class EbeCollector(object):
                 assert header_count==15, "No no no... Stop here."
                 try:
                     data_row_count = int(aLine.split()[0])
+                    phi_rotation = random.uniform(0, 2*pi)  # perform a random rotation of the each event
                 except ValueError as e:
                     print("The file "+ UrQMDoutputFilePath +" does not have a valid urqmd output file header!")
                     exit(e)
@@ -935,11 +941,15 @@ class EbeCollector(object):
                             if rap < rap_range[1] and rap > rap_range[0]:
                                 pT = math.sqrt(px*px + py*py)
                                 pMag = math.sqrt(pT*pT + pz*pz)
-                                phi = math.atan2(py, px)
+                                x_rotated = x*cos(phi_rotation) - y*sin(phi_rotation)
+                                y_rotated = y*cos(phi_rotation) + x*sin(phi_rotation)
+                                px_rotated = px*cos(phi_rotation) - py*sin(phi_rotation)
+                                py_rotated = py*cos(phi_rotation) + px*sin(phi_rotation)
+                                phi = math.atan2(py_rotated, px_rotated)
                                 pseudorap = 0.5*math.log((pMag + pz)/(pMag - pz))
                                 tau = math.sqrt(t*t - z*z)
                                 eta = 0.5*math.log((t+z)/(t-z))
-                                db.insertIntoTable("particle_list", (hydroEvent_id, UrQMDEvent_id, databasePid, float(tau), float(x), float(y), float(eta), float(pT), float(phi), float(rap), float(pseudorap)))
+                                db.insertIntoTable("particle_list", (hydroEvent_id, UrQMDEvent_id, databasePid, float(tau), float(x_rotated), float(y_rotated), float(eta), float(pT), float(phi), float(rap), float(pseudorap)))
                     except ValueError as e:
                         print("The file "+ UrQMDoutputFilePath +" does not have valid urqmd data!")
                         exit(e)
