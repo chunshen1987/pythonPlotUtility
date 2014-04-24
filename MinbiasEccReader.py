@@ -182,8 +182,8 @@ class MinbiasEccReader(object):
             dsdy_err = std(fetched_data[:,2])/sqrt(nev)
             ncoll_err = std(fetched_data[:,3])/sqrt(nev)
             centrality_output.write(
-                "%6.4f  %18.8e  %18.8e  %18.8e  %18.8e  %18.8e  %18.8e  "
-                "%18.8e  %18.8e \n"
+                "%6.4f  %18.3f  %18.3f  %18.3f  %18.3f  %18.3f  %18.3f  "
+                "%18.3f  %18.3f \n"
                 % (cen_central, npart_mean, npart_err, b_mean, b_err, 
                    dsdy_mean, dsdy_err, ncoll_mean, ncoll_err)
             )
