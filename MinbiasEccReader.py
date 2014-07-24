@@ -45,6 +45,10 @@ class MinbiasEccReader(object):
         self.centrality_boundaries = [
             (0, 0.2), (0, 1), (0, 5), (5, 10), (10, 20), (20, 30), (30, 40),
             (40, 50), (50, 60), (60, 70), (70, 80)]
+        #self.centrality_boundaries = [
+        #    (0, 5), (5, 10), (10, 15), (15, 20), (20, 25), (25, 30), 
+        #    (30, 35), (35, 40), (40, 45), (45, 50), (50, 55), (55, 60), 
+        #    (60, 65), (65, 70), (70, 75), (75, 80)]
 
         # get total number of events
         self.nev = self.get_number_of_events()
@@ -182,13 +186,82 @@ class MinbiasEccReader(object):
             dsdy_err = std(fetched_data[:,2])/sqrt(nev)
             ncoll_err = std(fetched_data[:,3])/sqrt(nev)
             centrality_output.write(
-                "%6.4f  %18.3f  %18.3f  %18.3f  %18.3f  %18.3f  %18.3f  "
-                "%18.3f  %18.3f \n"
+                "%6.4e  %18.8e  %18.8e  %18.8e  %18.8e  %18.8e  %18.8e  "
+                "%18.8e  %18.8e \n"
                 % (cen_central, npart_mean, npart_err, b_mean, b_err, 
                    dsdy_mean, dsdy_err, ncoll_mean, ncoll_err)
             )
         centrality_output.close()
 
+    def centrality_cut_with_avg_collisional_parameters_latex(self, cut_type):
+        """
+            this function cut the centralities and output event averaged
+            collisional parameters
+        """
+        print ('cutting centralities from database %s according to %s ....'
+               % (purple + self.db_name + normal, green + cut_type + normal))
+        centrality_output = open(
+            'avgcollisionParameters_centralityCut_latex_%s.dat' % cut_type, 
+            'w')
+        centralitycut_output = open(
+            'centralityCut_latex_%s.dat' % cut_type, 'w')
+        centrality_output.write(
+            "centrality (\%) & $\langle N_\mathrm{part} \\rangle$ & "
+            "$\langle b \\rangle$ (fm) & $\langle dS/dy \\rangle$  & "
+            "$\langle N_\mathrm{coll} \\rangle$ \\\\ \hline \n")
+        centralitycut_output.write(
+            "centrality (\%) & $N_\mathrm{min}$ & $N_\mathrm{max}$ & "
+            "$dS/dy_\mathrm{min}$ & $dS/dy_\mathrm{max}$ & "
+            "$b_\mathrm{min}$ (fm) & $b_\mathrm{max}$ (fm) \\\\ \hline \n")
+        nevent = self.nev
+
+        for icen in range(len(self.centrality_boundaries)):
+            lowerbound = self.centrality_boundaries[icen][0]
+            upperbound = self.centrality_boundaries[icen][1]
+            nsample = int(nevent * (upperbound - lowerbound) / 100) - 1
+            noffset = int(nevent * lowerbound / 100)
+            if cut_type == 'b':
+                fetched_data = array(self.db.executeSQLquery(
+                    "select Npart, b, total_entropy, Ncoll from "
+                    "collisionParameters order by %s limit %d offset %d"
+                    % (cut_type, nsample, noffset)
+                ).fetchall())
+            else:
+                fetched_data = array(self.db.executeSQLquery(
+                    "select Npart, b, total_entropy, Ncoll from "
+                    "collisionParameters order by -%s limit %d offset %d"
+                    % (cut_type, nsample, noffset)
+                ).fetchall())
+            cen_central = (upperbound + lowerbound) / 2.
+            nev = len(fetched_data[:,0])
+            npart_mean = mean(fetched_data[:, 0])
+            npart_min = min(fetched_data[:, 0])
+            npart_max = max(fetched_data[:, 0])
+            b_mean = mean(fetched_data[:,1])
+            bmin = min(fetched_data[:, 1])
+            bmax = max(fetched_data[:, 1])
+            dsdy_mean = mean(fetched_data[:,2])
+            dsdymin = min(fetched_data[:, 2])
+            dsdymax = max(fetched_data[:, 2])
+            ncoll_mean = mean(fetched_data[:,3])
+            npart_err = std(fetched_data[:, 0])/sqrt(nev)
+            b_err = std(fetched_data[:,1])/sqrt(nev)
+            dsdy_err = std(fetched_data[:,2])/sqrt(nev)
+            ncoll_err = std(fetched_data[:,3])/sqrt(nev)
+            centrality_output.write(
+                "%g-%g & %10.2f $\pm$ %10.2f & %10.2f $\pm$ %10.2f & "
+                "%10.2f $\pm$ %10.2f & %10.2f $\pm$ %10.2f \\\\ \hline \n"
+                % (lowerbound, upperbound, npart_mean, npart_err, 
+                   b_mean, b_err, dsdy_mean, dsdy_err, ncoll_mean, ncoll_err)
+            )
+            centralitycut_output.write(
+                "%g-%g &  %d & %d & %10.2f & %10.2f & %10.2f & %10.2f "
+                "\\\\ \hline \n"
+                % (lowerbound, upperbound, npart_min, npart_max, dsdymin,
+                   dsdymax, bmin, bmax)
+            )
+        centrality_output.close()
+        centralitycut_output.close()
 
     def get_distribution(self, dis_type='total_entropy', nbin=30,
                          cut_type='total_entropy', centrality_bound=(0, 100)):
