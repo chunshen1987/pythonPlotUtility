@@ -44,5 +44,6 @@ if __name__ == "__main__":
             print_help_message_and_quit()
     reader = MinbiasEccReader(db_name)
     #reader.centrality_cut_with_avg_collisional_parameters_latex(cut_type)
-    reader.cut_centralities_with_ecc_statistics(cut_type, multiplicity_factor)
+    #reader.cut_centralities_with_ecc_statistics(cut_type, multiplicity_factor)
     #reader.centrality_cut_with_avg_collisional_parameters(cut_type)
+    reader.output_centrality_cut_table_iebe_package(cut_type)
