@@ -1401,13 +1401,15 @@ class EbeDBReader(object):
             "pT_range" will be returned, otherwise only those satisfying
             pT_range(0)<=pT<=pT_range(1) will be returned.
         """
-        whereClause = "pid=%d and n=%d" % (self._pid(particleName), order)
+        pid = self._pid(particleName)
+        whereClause = "pid=%d and n=%d" % (pid, order)
         if pT_range:
             whereClause += " and %g<=pT and pT<=%g" % (pT_range[0], pT_range[1])
         if where:
             whereClause += " and " + where
         RawdiffvnData = np.asarray(self.db.selectFromTable("diff_vn", ("pT", "vn_real", "vn_imag"), whereClause=whereClause, orderByClause=orderBy))
-        nevent = self.getNumberOfEvents()
+        #nevent = self.getNumberOfEvents()
+        nevent = self.db.selectFromTable("multiplicities", "count()", "pid = %d" % pid)[0][0]
         npT = len(RawdiffvnData[:,0])/nevent
         diffvnData = RawdiffvnData.reshape(nevent, npT, 3)
         return diffvnData
@@ -1461,13 +1463,15 @@ class EbeDBReader(object):
             will be returned, otherwise only those satisfying
             pT_range(0)<=pT<=pT_range(1) will be returned.
         """
-        whereClause = "pid=%d" % (self._pid(particleName))
+        pid = self._pid(particleName)
+        whereClause = "pid=%d" % pid
         if pT_range:
             whereClause += " and %g<=pT and pT<=%g" % (pT_range[0], pT_range[1])
         if where:
             whereClause += " and " + where
         RawdNdyData = np.asarray(self.db.selectFromTable("spectra", ("pT", "N"), whereClause=whereClause, orderByClause=orderBy))
-        nevent = self.getNumberOfEvents()
+        #nevent = self.getNumberOfEvents()
+        nevent = self.db.selectFromTable("multiplicities", "count()", "pid = %d" % pid)[0][0]
         npT = len(RawdNdyData[:,0])/nevent
         dNdyData = RawdNdyData.reshape(nevent, npT, 2)
         return dNdyData
