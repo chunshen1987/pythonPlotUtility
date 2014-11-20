@@ -15,6 +15,10 @@ except:
     exit()
 
 # get optional parameters
+if len(argv) >= 6:
+    collectfileFlag = argv[5]
+else:
+    collectfileFlag = 'new'
 if len(argv) >= 5:
     database_filename = argv[4]
 else:
@@ -35,4 +39,4 @@ else:
 
 # call EbeCollector
 from EbeCollector import EbeCollector
-EbeCollector().collectMinbiasEcc(from_folder, database_filename, multiplicityFactor, deformedFlag)
+EbeCollector().collectMinbiasEcc(from_folder, database_filename, multiplicityFactor, deformedFlag, collectfileFlag)

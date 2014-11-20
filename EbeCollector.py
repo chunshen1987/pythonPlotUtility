@@ -1007,6 +1007,49 @@ class EbeCollector(object):
 
         # close connection to commit changes
         db.closeConnection()
+    
+    def collectInitialeccnStatistics_onefile(self, folder, db, multiplicityFactor = 1.0, deformedNuclei = False):
+        """
+            This function collects eccn, Npart, Ncoll, dS/dy, impact parameter from
+            superMC output files into database.
+        """
+        typeCollections = ((1, 'sn'), (2,'en'))
+        # first write the ecc_id_lookup table, makes sure there is only one such table
+        if db.createTableIfNotExists("ecc_id_lookup", (("ecc_id","integer"), ("ecc_type_name","text"))):
+            for ecc_id, ecc_type_name in typeCollections:
+                db.insertIntoTable("ecc_id_lookup", (ecc_id, ecc_type_name))
+        
+        # next create the eccentricities and collisionParameters table
+        db.createTableIfNotExists("eccentricities", (("event_id","integer"), ("ecc_id", "integer"), ("n","integer"), ("ecc_real","real"), ("ecc_imag","real")))
+        db.createTableIfNotExists("collisionParameters", (("event_id","integer"), ("Npart", "integer"), ("Ncoll","integer"), ("b","real"), ("total_entropy","real")))
+        if(deformedNuclei):
+            db.createTableIfNotExists("deformationParameters", (("event_id","integer"), ("cosTheta1", "real"), ("phi1","real"), ("cosTheta2","real"), ("phi2","real")))
+
+        # the big loop
+        for ecc_id, ecc_type_name in typeCollections:
+            data = loadtxt(path.join(folder, '%s_ecc_eccp_10.dat' %(ecc_type_name)))
+            if ecc_id == 1:
+                Npart = data[:, 36]
+                Ncoll = data[:, 37]
+                dSdy = data[:, 38]/multiplicityFactor   #scale out the multiplicity factor used in superMC
+                b = data[:, 39]
+                for event_id in range(len(Npart)):
+                    db.insertIntoTable("collisionParameters", (event_id, int(Npart[event_id]), int(Ncoll[event_id]), float(b[event_id]), float(dSdy[event_id])))
+                if(deformedNuclei):
+                    cosTheta1 = data[:, 40]
+                    phi1 = data[:, 41]
+                    cosTheta2 = data[:, 42]
+                    phi2 = data[:, 43]
+                    for event_id in range(len(Npart)):
+                        db.insertIntoTable("deformationParameters", (event_id, float(cosTheta1[event_id]), float(phi1[event_id]), float(cosTheta2[event_id]), float(phi2[event_id])))
+            for iorder in range(1,10):
+                eccReal = data[:, 4*iorder - 2]
+                eccImag = data[:, 4*iorder - 1]
+                for event_id in range(len(eccReal)):
+                    db.insertIntoTable("eccentricities",(event_id, ecc_id, iorder, float(eccReal[event_id]), float(eccImag[event_id])))
+
+        # close connection to commit changes
+        db.closeConnection()
 
     def createDatabaseFromEventFolders(self, folder, subfolderPattern="event-(\d*)", databaseFilename="CollectedResults.db", collectMode="fromUrQMD", multiplicityFactor=1.0):
         """
@@ -1162,7 +1205,7 @@ class EbeCollector(object):
                 exit(-1)
 
     
-    def collectMinbiasEcc(self, folder, databaseFilename="MinbiasEcc.db", multiplicityFactor = 1.0, deformed = False):
+    def collectMinbiasEcc(self, folder, databaseFilename="MinbiasEcc.db", multiplicityFactor = 1.0, deformed = False, collectfile = 'new'):
         """
             This function collects initial eccn statistical information from minimum bias events generated from  superMC
             outputs into a database
@@ -1172,7 +1215,10 @@ class EbeCollector(object):
         print("-"*80)
         print("Collecting initial minimum bias events information from superMC outputs...")
         print("-"*80)
-        self.collectInitialeccnStatistics(folder, db, multiplicityFactor, deformed) # collect eccn information from data files
+        if collectfile == 'new':
+            self.collectInitialeccnStatistics_onefile(folder, db, multiplicityFactor, deformed)
+        else:
+            self.collectInitialeccnStatistics(folder, db, multiplicityFactor, deformed) # collect eccn information from data files
 
 
     def mergeDatabases(self, toDB, fromDB):
