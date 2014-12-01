@@ -22,7 +22,7 @@ else:
 if len(argv) >= 5:
     database_filename = argv[4]
 else:
-    database_filename = "minbiasEcc.db"
+    database_filename = "minbiasEcc_%s.db"
 if len(argv) >= 4:
     deformedNuclei = argv[3]
 else:
