@@ -8,6 +8,7 @@
 import math
 from sys import exit
 from os import path, listdir
+from glob import glob
 import re
 import numpy as np
 from numpy import * # used by EbeDBReader.evaluateExpression function to support all math operations
@@ -15,9 +16,6 @@ from DBR import SqliteDB
 from assignmentFormat import assignmentExprStream2IndexDict
 from ListRNew import isIterable
 from StringSubstitution import StringSubstitution
-
-
-
 
 
 class EbeCollector(object):
@@ -105,7 +103,7 @@ class EbeCollector(object):
             "decay_gamma_etap_hydro" : 9011,
             "decay_gamma_Sigma0_hydro" : 9012,
         })
-        
+
         #UrQMD pid Dictionary, name conversion defined as in binUtility
         self.UrQMDpidDict = { #particle name, UrQMD id# : isospin*2000 + pid
             2101        :    "pion_p",
@@ -138,7 +136,7 @@ class EbeCollector(object):
             107         :    "eta_prime",
             100         :    "gamma",
         }
-        
+
         #pdg pid Dictionary
         self.PDGpidDict = { #pdg id#, particle name
             211         :    "pion_p",
@@ -222,7 +220,7 @@ class EbeCollector(object):
             self.masspidDict[aParticle+"_thermal"] = self.masspidDict[aParticle]
 
         # charged hadrons list
-        self.charged_hadron_list = [ 
+        self.charged_hadron_list = [
             "pion_p", "pion_m", "kaon_p", "kaon_m", "proton", "anti_proton",
             "sigma_p", "sigma_m", "anti_sigma_p", "anti_sigma_m",
             "xi_m", "anti_xi_m"]
@@ -494,7 +492,7 @@ class EbeCollector(object):
 
         # close connection to commit changes
         db.closeConnection()
-    
+
     def collectFLowsAndMultiplicities_iSFormat_decayphoton_Cocktail(self, folder, event_id, db, useSubfolder="spectra"):
         """
             This function collects integrated and differential flows data
@@ -596,7 +594,7 @@ class EbeCollector(object):
 
         # close connection to commit changes
         db.closeConnection()
-    
+
     def collectEccentricityfrom11P5N(self, folder, db):
         """
             This function collect eccentricity data
@@ -621,7 +619,7 @@ class EbeCollector(object):
         db.createTableIfNotExists("r_integrals", (("event_id","integer"), ("ecc_id","integer"), ("r_power","integer"), ("r_inte","real")))
 
         # the big loop
-        for ecc_id, ecc_type_name in typeCollections: 
+        for ecc_id, ecc_type_name in typeCollections:
            for Ir_power in range(10):
               fileName = '%s_ecc_r_power_%d.dat' % (ecc_type_name, Ir_power)
               print('processing %s' % fileName)
@@ -658,7 +656,7 @@ class EbeCollector(object):
             "thermal_2212"  :   "proton_thermal",
         }
         fileName = "11P5N_moments_order_%d_%s.dat" # filename for integrated differential nth flow files
-        
+
         # first write the pid_lookup table, makes sure there is only one such table
         if db.createTableIfNotExists("pid_lookup", (("name","text"), ("pid","integer"))):
             db.insertIntoTable("pid_lookup", list(self.pidDict.items()))
@@ -671,13 +669,13 @@ class EbeCollector(object):
         # the big loop
         for particle_string_infile in toCollect.keys():
            pid = self.pidDict[toCollect[particle_string_infile]]
-           
+
            for Iorder in range(1,10):
               # first, differential flow
               particle_filename = path.join(folder, fileName % (Iorder, particle_string_infile))
               if path.exists(particle_filename):
                  print("processing %s ..." % particle_filename)
-                 
+
                  # write flow table
                  for rowIdx, aLine in enumerate(open(particle_filename)):
                     event_id = rowIdx+1
@@ -698,7 +696,7 @@ class EbeCollector(object):
 
         # close connection to commit changes
         db.closeConnection()
-    
+
     def collectFLowsAndMultiplicities_photon(self, folder, event_id, db, useSubfolder="spectra"):
         """
             This function collects integrated and differential flows data
@@ -790,7 +788,7 @@ class EbeCollector(object):
                 pid_to_collect += map(lambda x: self.pidDict[x], self.charged_hadron_list)
             else:
                 pid_to_collect += [self.pidDict[aParticle]]
-        
+
         # first write the pid_lookup table, makes sure there is only one such table
         if db.createTableIfNotExists("pid_lookup", (("name","text"), ("pid","integer"))):
             db.insertIntoTable("pid_lookup", list(self.pidDict.items()))
@@ -863,7 +861,7 @@ class EbeCollector(object):
                     data_row_count = 0
                     header_count = 0 # not pointing at the header line yet
                     read_mode = "header_second_part"
-        
+
         # close connection to commit changes
         db.closeConnection()
 
@@ -928,10 +926,10 @@ class EbeCollector(object):
                         pid = int(aLine[216:222])
                         UrQMDpid = pid + isospin2*1000
                         try:
-                            if pid == 100 and isospin2 != 0: 
+                            if pid == 100 and isospin2 != 0:
                             # UrQMD seems to have a bug for decay photon isospin and charge
                                 print("Warning: decay photon's isospin is not correct!")
-                                UrQMDpid = 100 
+                                UrQMDpid = 100
                             databasePid = self.pidDict[self.UrQMDpidDict[UrQMDpid]]
                         except ValueError as e:
                             print("Can not find particle id in the dictionary!")
@@ -961,7 +959,7 @@ class EbeCollector(object):
                     data_row_count = 0
                     header_count = 0 # not pointing at the header line yet
                     read_mode = "header_first_part"
-        
+
         # close connection to commit changes
         db.closeConnection()
 
@@ -976,7 +974,7 @@ class EbeCollector(object):
             # first write the ecc_id_lookup table, makes sure there is only one such table
             if db.createTableIfNotExists("ecc_id_lookup", (("ecc_id","integer"), ("ecc_type_name","text"))):
                 db.insertIntoTable("ecc_id_lookup", (ecc_id, ecc_type_name))
-            
+
             # next create the eccentricities and collisionParameters table
             db.createTableIfNotExists("eccentricities", (("event_id","integer"), ("ecc_id", "integer"), ("n","integer"), ("ecc_real","real"), ("ecc_imag","real")))
             db.createTableIfNotExists("collisionParameters", (("event_id","integer"), ("Npart", "integer"), ("Ncoll","integer"), ("b","real"), ("total_entropy","real")))
@@ -1007,7 +1005,7 @@ class EbeCollector(object):
 
             # close connection to commit changes
             db.closeConnection()
-    
+
     def collectInitialeccnStatistics_onefile(self, folder, databaseFilename, multiplicityFactor = 1.0, deformedNuclei = False):
         """
             This function collects eccn, Npart, Ncoll, dS/dy, impact parameter from
@@ -1019,7 +1017,7 @@ class EbeCollector(object):
             # first write the ecc_id_lookup table, makes sure there is only one such table
             if db.createTableIfNotExists("ecc_id_lookup", (("ecc_id","integer"), ("ecc_type_name","text"))):
                 db.insertIntoTable("ecc_id_lookup", (ecc_id, ecc_type_name))
-            
+
             # next create the eccentricities and collisionParameters table
             db.createTableIfNotExists("eccentricities", (("event_id","integer"), ("ecc_id", "integer"), ("n","integer"), ("ecc_real","real"), ("ecc_imag","real")))
             db.createTableIfNotExists("collisionParameters", (("event_id","integer"), ("Npart", "integer"), ("Ncoll","integer"), ("b","real"), ("total_entropy","real")))
@@ -1049,6 +1047,107 @@ class EbeCollector(object):
 
             # close connection to commit changes
             db.closeConnection()
+
+    def collect_music_event(self, folder, event_id, db):
+        """
+            This function collects results from MUSIC event.
+        """
+        # collection of file name patterns, pid, and particle name.
+        # string in filename, particle name
+        toCollect = ["charged_hydro",
+                     "pion_p_hydro", "kaon_p_hydro", "proton_hydro"]
+        differential_vn_filename_list = [
+            'FpT_vn_squared_charged_rapidity_hadrons.dat',
+            'FpT_vn_squared_pions_kaons_protons_rapidity.dat',
+            'FpT_vn_squared_pions_kaons_protons_rapidity.dat',
+            'FpT_vn_squared_pions_kaons_protons_rapidity.dat']
+
+
+        # first write the pid_lookup table, makes sure there is only one such table
+        if db.createTableIfNotExists("pid_lookup",
+                                     (("name", "text"), ("pid", "integer"))):
+            db.insertIntoTable("pid_lookup", list(self.pidDict.items()))
+        # next create various tables
+        db.createTableIfNotExists(
+            "inte_vn", (("event_id", "integer"), ("pid", "integer"),
+                        ("n", "integer"), ("vn_real", "real"),
+                        ("vn_imag", "real"))
+        )
+        db.createTableIfNotExists(
+            "diff_vn", (("event_id", "integer"), ("pid", "integer"),
+                        ("pT", "real"), ("n", "integer"), ("vn_real", "real"),
+                        ("vn_imag", "real"))
+        )
+        db.createTableIfNotExists(
+            "multiplicities", (("event_id", "integer"), ("pid", "integer"),
+                               ("N", "real"))
+        )
+        db.createTableIfNotExists(
+            "spectra", (("event_id", "integer"), ("pid", "integer"),
+                        ("pT", "real"), ("N", "real"))
+        )
+
+        largest_n = 6
+
+        folder = path.join(folder, 'tmp', 'outputs')
+        # the big loop
+        for iparticle in range(len(toCollect)):
+            pid = self.pidDict[toCollect[iparticle]]
+
+            # first, differential flow
+            particle_filename = path.join(
+                folder, differential_vn_filename_list[iparticle])
+            particle_spectra = path.join(
+                folder, "FpT_spectra_pions_protons_kaons.dat")
+
+            if path.exists(particle_filename):
+                # extract differential flow and spectra information
+                diff_flow_block = loadtxt(particle_filename)
+                # write flow table
+                for aRow in diff_flow_block:
+                    for n in range(1, largest_n):
+                        if iparticle == 0:
+                            db.insertIntoTable(
+                                "diff_vn", (event_id, pid, aRow[0], n,
+                                            sqrt(aRow[n]), 0.0))
+                        else:
+                            particle_idx = 3*(n-1) + iparticle + 1
+                            db.insertIntoTable(
+                                "diff_vn", (event_id, pid, aRow[0], n,
+                                            sqrt(aRow[particle_idx]), 0.0))
+            if path.exists(particle_spectra):
+                diff_spectra_block = np.loadtxt(particle_spectra)
+                # write spectra table
+                for aRow in diff_spectra_block:
+                    if iparticle == 0:
+                        continue
+                    else:
+                        db.insertIntoTable(
+                            "spectra", (event_id, pid, aRow[0],
+                                        aRow[iparticle]*(2*np.pi)*aRow[0]))
+
+            # next, integrated flow
+            particle_filename = path.join(
+                folder, "FpT-integrated_vn_squared_hadrons.dat")
+            particle_multiplicity = path.join(
+                folder, "Fmultiplicity_hadrons_rapidity.dat")
+            if path.exists(particle_filename):
+                # extract integrated flow and multiplicity information
+                inte_flow_block = loadtxt(particle_filename)
+                # write flow table
+                for n in range(1, largest_n):
+                    db.insertIntoTable(
+                        "inte_vn", (event_id, pid, n,
+                                    sqrt(inte_flow_block[n-1, iparticle]), 0.0))
+            if path.exists(particle_multiplicity):
+                multiplicity_block = loadtxt(particle_multiplicity)
+                # write multiplicity table
+                db.insertIntoTable(
+                    "multiplicities", (event_id, pid,
+                                       multiplicity_block[0, iparticle]))
+
+        # close connection to commit changes
+        db.closeConnection()
 
     def createDatabaseFromEventFolders(self, folder, subfolderPattern="event-(\d*)", databaseFilename="CollectedResults.db", collectMode="fromUrQMD", multiplicityFactor=1.0):
         """
@@ -1187,7 +1286,7 @@ class EbeCollector(object):
                 else:
                     hydroEvent_id = folder_index
                 matchedSubfolders.append((fullPath, hydroEvent_id)) # matched!
-        
+
         # the data collection loop
         db = SqliteDB(path.join(folder, databaseFilename))
         print("-"*60)
@@ -1203,7 +1302,7 @@ class EbeCollector(object):
                 print("Error: can not recognize the input file format : %s", fileformat)
                 exit(-1)
 
-    
+
     def collectMinbiasEcc(self, folder, databaseFilename="MinbiasEcc.db", multiplicityFactor = 1.0, deformed = False, collectfile = 'new'):
         """
             This function collects initial eccn statistical information from minimum bias events generated from  superMC
@@ -1218,6 +1317,37 @@ class EbeCollector(object):
             self.collectInitialeccnStatistics_onefile(folder, databaseFilename, multiplicityFactor, deformed)
         else:
             self.collectInitialeccnStatistics(folder, databaseFilename, multiplicityFactor, deformed) # collect eccn information from data files
+
+
+    def collect_music_results(self, folder, database_filename="results.db"):
+        """
+            This function collects simulations results from MUSIC
+            into a database
+        """
+        # get list of successful events
+        file_list = glob(path.join(path.abspath(folder), '*'))
+        print('There are %d events in total' % len(file_list))
+        success_folder_list = []
+        for ifolder in range(len(file_list)):
+            folder_name = file_list[ifolder]
+            if path.isdir(path.join(folder_name, 'tmp', 'outputs')):
+                success_folder_list.append(folder_name)
+        print('There are %d events are successfully processed'
+              % len(success_folder_list))
+
+        # the data collection loop
+        db = SqliteDB(path.join(folder, database_filename))
+        print("-"*60)
+        print("Collecting results from MUSIC outputs...")
+        print("-"*60)
+
+        for ifolder in range(len(success_folder_list)):
+            folder_name = success_folder_list[ifolder]
+            event_id = ifolder
+            print("Collecting %s as with event-id: %s"
+                  % (folder_name, event_id))
+            # collect results from one hydro event
+            self.collect_music_event(folder_name, event_id, db)
 
 
     def mergeDatabases(self, toDB, fromDB):
@@ -1437,7 +1567,7 @@ class EbeDBReader(object):
         """
         diffVnData = self.getDifferentialFlowDataForOneEvent(event_id=event_id, particleName=particleName, order=order)
         return np.interp(pTs, diffVnData[:,0], diffVnData[:,1]) + 1j*np.interp(pTs, diffVnData[:,0], diffVnData[:,2])
-    
+
     def getDifferentialFlowDataForAllEvents(self, particleName="pion", order=2, pT_range=None, where="", orderBy="event_id"):
         """
             Return the (p_T, real(v_n), imag(v_n)) list for the differential
@@ -1458,7 +1588,7 @@ class EbeDBReader(object):
         npT = len(RawdiffvnData[:,0])/nevent
         diffvnData = RawdiffvnData.reshape(nevent, npT, 3)
         return diffvnData
-    
+
     def getInterpretedComplexDifferentialFlowsForAllEvents(self, particleName="pion", order=2, pTs=np.linspace(0,2.5,10), where="", orderBy="event_id", verbose=False):
         """
             Return the interpreted complex differential flow on pT points pTs, 
@@ -1539,7 +1669,7 @@ class EbeDBReader(object):
            dNdyintepBlock.append(dNdyintep)
         if verbose: print("Done. Thanks for waiting.")
         return np.asarray(dNdyintepBlock)
-    
+
     get_dNdydpT = getInterpretedSpectraForAllEvents
 
     def getAttendance(self):
@@ -1583,24 +1713,24 @@ class EbeDBReader(object):
         expression = expression.replace(" ", "")
         # perform lazy initialization
         if not self.hasInitializedStringSubstitution:
-            
+
             # The groups of substitution rules it contains will loop until there
             # is no more changes, thus only the relative order between the
             # groups matter: make sure groups appear earlier contain expansions
             # that should be done before groups appear later.
             # Note that all the substitution strings contain no spaces
             self.useStringSubstitution_normalization = (
-                
+
             # 0th priorities: standardize notations
             StringSubstitution((
-                
+
                 # common
                 ("\(e\)", "(ed)"), # ed -> e
                 ("\(s\)", "(sd)"), # sd -> s
-                
+
                 # add {} to subscript to enable expansion of [2] and [4]
                 ("_([\d]+)", "_{{{0[0]}}}"), # add { } to subscripts
-                
+
                 # eccentricities
                 ("Eccentricity_", "Ecc_"), # Eccentricity_ -> Ecc_
                 ("E_", "Ecc_"), # E_ -> Ecc_
@@ -1609,42 +1739,42 @@ class EbeDBReader(object):
                 # latex style support
                 ("Epsilon_", "Ecc_"),
                 ("epsilon_", "ecc_"),
-                
+
                 # eccentricity:
                 # Ecc_{m,n}(ed) := {r^m e^{i n phi}}_e
                 ("Ecc_{([\d]+)}", "Ecc_{{{0[0]},{0[0]}}}"), # Ecc_{n} -> Ecc_{n,n}
-                
+
                 # r-averages
                 # {r^m}(ed) := int(r^m*ed)/int(ed)
                 ("{R\^", "{{r^"),
-            
+
                 # r-integrals
                 # [r^m](ed) := int(r^m*ed)
                 ("\[R\^", "[r^"),
-                
+
                 # multiplicity:
                 # dN/dy(pion) := pion multiplicity
                 ("[^d]N\(", "dN/dy("),
                 ("dN\(", "dN/dy("),
-            
+
                 # spectra:
                 # dN/(dydpT)(pTs)(pion) := pion spectra at pTs values
                 ("dN/dpT", "dN/(dydpT)"),
-                ("dN/dydpT", "dN/(dydpT)"),                
-            )),    
-                
+                ("dN/dydpT", "dN/(dydpT)"),
+            )),
+
             # 1st priorities: expanding [2] [4]
             StringSubstitution((
 
                 # support for xxx_{ooo}[2](oxox)
                 ("([\w_]+)_{([\d,]+)}\[2\]\(([\w_]+)\)", 'sqrt(<{0[0]}_{{{0[1]}}}({0[2]})**2>)'), # without (pTs)
                 ("([\w_]+)_{([\d,]+)}\[2\](\(.*?\))\(([\w_]+)\)", 'sqrt(<{0[0]}_{{{0[1]}}}{0[2]}({0[3]})**2>)'), # with (pTs)
-                
+
                 # support for xxx_{ooo}[4](oxox)
                 ("([\w_]+)_{([\d,]+)}\[4\]\(([\w_]+)\)", '((2*<{0[0]}_{{{0[1]}}}({0[2]})**2>**2-<{0[0]}_{{{0[1]}}}({0[2]})**4>)**0.25)'), # without (pTs)
                 ("([\w_]+)_{([\d,]+)}\[4\](\(.*?\))\(([\w_]+)\)", '((2*<{0[0]}_{{{0[1]}}}{0[2]}({0[3]})**2>**2-<{0[0]}_{{{0[1]}}}{0[2]}({0[3]})**4>)**0.25)'), # with (pTs)
             )),
-            
+
             # 2nd priorities: expand special functions || <> $$ (related: ecc, v, Phi, Psi)
             StringSubstitution((
 
@@ -1655,7 +1785,7 @@ class EbeDBReader(object):
 
                 # || = abs
                 ("\|([\w_]+)\|(.*?)\(([\w_]+)\)", "|{0[0]}{0[1]}({0[2]})|"), # |ooo|xxx(oxox) -> |oooxxx(oxox)|; oxox is a word
-                
+
                 # <> = mean
                 ("<([\w_]+)>(.*?)\(([\w_]+)\)", "<{0[0]}{0[1]}({0[2]})>"), # <ooo>xxx(oxox) -> <oooxxx(oxox)>; oxox is a word
 
@@ -1667,7 +1797,7 @@ class EbeDBReader(object):
                 # $$ = get plane angles; only applies to Ecc and V
                 ("\$([\w_]+)\$(.*?)\(([\w_]+)\)", "${0[0]}{0[1]}({0[2]})$"), # <ooo>xxx(oxox) -> <oooxxx(oxox)>; oxox is a word
             )),
-            
+
             )
 
             # convert standardized notations to functions
@@ -1682,7 +1812,7 @@ class EbeDBReader(object):
                 # $$: get plane angles; only applies to Ecc (angle(-Ecc_n)/n) and V (angle(V_n)/n)
                 ("\$Ecc_{([\d\w+]),([\d\w+])}(.*?)\$", 'angle(Ecc_{{{0[0]},{0[1]}}}{0[2]})/{0[1]}'),
                 ("\$V_{([\d\w+])}(.*?)\$", 'angle(V_{{{0[0]}}}{0[1]})/{0[0]}'),
-                
+
                 # eccentricity:
                 # ecc_{m,n}(ed) := {-r^m e^{i n phi}}_e
                 ("Ecc_{([\d]+),([\d]+)}\((\w\w)\)", 'self.get_Ecc_n(eccType="{0[2]}", r_power={0[0]}, order={0[1]})'), # to functions
