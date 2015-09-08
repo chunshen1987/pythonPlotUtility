@@ -412,6 +412,84 @@ class MinbiasEccReader(object):
                 )
         centrality_output.close()
 
+    def ALICE_standard_candles_vs_centrality( self, n1, n2, cut_type='total_entropy'):
+        """
+            this function compute the correlation between 
+            epsilon_n1 and epsilon_n2:
+            corr = <ecc_n1^2 * ecc_n2^2> - <ecc_n1^2>*<ecc_n2^2>
+            as a function centrality
+            Output format:
+            centrality   corr   corr_err
+        """
+        nevent = self.nev
+        
+        centrality_bound = range(0, 41, 2)
+        cen_mid = zeros(len(centrality_bound)-1)
+        corr = zeros(len(centrality_bound)-1)
+        corr_err = zeros(len(centrality_bound)-1)
+
+        for icen in range(1,len(centrality_bound)):
+            lowerbound = centrality_bound[icen-1]
+            upperbound = centrality_bound[icen]
+            nsample = int(nevent * (upperbound - lowerbound) / 100) - 1
+            noffset = int(nevent * lowerbound / 100)
+            print(
+                "computing: SC(%d, %d, -%d, -%d) in %d%% - %d%% with nev = %d" 
+                % (n1, n2, n2, n1, lowerbound, upperbound, nsample))
+
+            cen_mid[icen-1] = (lowerbound + upperbound)/2.
+
+            # fetch the data
+            if cut_type in ['Npart', 'Ncoll', 'total_entropy']:
+                temp_data_1 = array(self.db.executeSQLquery(
+                    "select ecc_real, ecc_imag from eccentricities where "
+                    "ecc_id = 2 and n = %d and event_id in (select "
+                    "event_id from collisionParameters order by "
+                    "-collisionParameters.%s limit %d offset %d)"
+                    % (n1, cut_type, nsample, noffset)
+                ).fetchall())
+                temp_data_2 = array(self.db.executeSQLquery(
+                    "select ecc_real, ecc_imag from eccentricities where "
+                    "ecc_id = 2 and n = %d and event_id in (select "
+                    "event_id from collisionParameters order by "
+                    "-collisionParameters.%s limit %d offset %d)"
+                    % (n2, cut_type, nsample, noffset)
+                ).fetchall())
+            elif cut_type in ['b']:
+                temp_data_1 = array(self.db.executeSQLquery(
+                    "select ecc_real, ecc_imag from eccentricities where "
+                    "ecc_id = 2 and n = %d and event_id in (select "
+                    "event_id from collisionParameters order by "
+                    "collisionParameters.%s limit %d offset %d)"
+                    % (n1, cut_type, nsample, noffset)).fetchall())
+                temp_data_2 = array(self.db.executeSQLquery(
+                    "select ecc_real, ecc_imag from eccentricities where "
+                    "ecc_id = 2 and n = %d and event_id in (select "
+                    "event_id from collisionParameters order by "
+                    "collisionParameters.%s limit %d offset %d)"
+                    % (n2, cut_type, nsample, noffset)).fetchall())
+            fetched_data_1 = temp_data_1[:, 0] ** 2 + temp_data_1[:, 1] ** 2
+            fetched_data_2 = temp_data_2[:, 0] ** 2 + temp_data_2[:, 1] ** 2
+
+            mean_1 = mean(fetched_data_1)
+            mean_2 = mean(fetched_data_2)
+            
+            temp_corr = mean(fetched_data_1*fetched_data_2) - mean_1*mean_2
+            temp_corr_err = sqrt(
+                  std(fetched_data_1*fetched_data_2)**2.
+                + (std(fetched_data_1)*mean_2)**2.
+                + (mean_1*std(fetched_data_2))**2.
+            )/sqrt(nsample)
+            corr[icen-1] = temp_corr
+            corr_err[icen-1] = temp_corr_err
+            
+        res_output = array([cen_mid, corr, corr_err]).transpose()
+        savetxt(
+            'ALICE_standard_candle_ecc_%d_vs_ecc_%d.dat' % (n1, n2), 
+            res_output, fmt='%.6e', delimiter='   ',
+            header='centrality(%)   corr   corr_err')
+        
+        return res_output
 
 if __name__ == "__main__":
     reader = MinbiasEccReader(str(sys.argv[1]))
